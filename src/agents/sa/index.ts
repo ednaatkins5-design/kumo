@@ -1771,10 +1771,21 @@ export class SchoolAdminAgent extends BaseAgent {
                     return output;
                 }
 
-                // Support both list of absentees or single student name from LLM payload
-                const absentees = output.action_payload?.absentees || 
-                                 (output.action_payload?.student_name ? [{ name: output.action_payload.student_name }] : []);
-                const reason = output.action_payload?.reason || 'Student has been absent for multiple days.';
+                // Get absentees from ESCALATION CONTEXT (authoritative source) - NOT from LLM output (may hallucinate)
+                const escContext = pendingEscalation?.context ? 
+                    (typeof pendingEscalation.context === 'string' ? JSON.parse(pendingEscalation.context) : pendingEscalation.context) 
+                    : {};
+                
+                // Use absentees from escalation context - this is the authoritative source
+                let absentees = escContext.absentees || [];
+                
+                // If no absentees in escalation context, fall back to LLM output (with validation)
+                if (absentees.length === 0) {
+                    absentees = output.action_payload?.absentees || 
+                               (output.action_payload?.student_name ? [{ name: output.action_payload.student_name }] : []);
+                }
+                
+                const reason = output.action_payload?.reason || 'Student has been absent.';
                 
                 if (absentees.length === 0) {
                     output.reply_text = "I need a list of students to contact. Which parents should I reach out to?";
@@ -1789,11 +1800,16 @@ export class SchoolAdminAgent extends BaseAgent {
                     for (const student of absentees) {
                         // Handle both string names and student objects
                         const studentName = typeof student === 'string' ? student : (student.name || student.student_name || 'Unknown');
+                        
+                        // Build proper instruction for PA - NOT the admin's reply text
+                        const paInstruction = `The school admin has asked you to contact the parent of ${studentName} who was marked absent. Express concern about the absence and ask if there's anything the school can do to help.`;
+                        
                         const res = await AgentBridgeService.engageParentOnAbsence(
                             schoolId,
                             studentName,
                             reason,
-                            message.from
+                            message.from,
+                            paInstruction
                         );
                         results.push({ 
                             name: studentName, 

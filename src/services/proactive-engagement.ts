@@ -116,67 +116,93 @@ export class AgentBridgeService {
         schoolId: string,
         studentName: string,
         reason: string,
-        adminPhone: string
+        adminPhone: string,
+        adminInstruction?: string
     ): Promise<WorkReport> {
         try {
-            logger.info({ schoolId, studentName }, '🔍 [BRIDGE] Resolving parent for proactive checkup');
+            logger.info({ schoolId, studentName, reason, adminInstruction }, '🔍 [BRIDGE] Resolving parent for proactive checkup');
 
-            // 1. Resolve student and parent phone
-            // We search BOTH the master students table and the class_student_mapping from TA setup
-            const mapping: any = await new Promise((resolve) => {
+            // 1. Try to find student in students table first
+            let mapping: any = await new Promise((resolve) => {
                 const sql = `
                     SELECT 
                         s.student_id, 
+                        s.name as student_name,
                         pr.parent_phone, 
                         pr.parent_name, 
                         s.class_level,
-                        EXISTS(SELECT 1 FROM parent_registry WHERE parent_phone IS NOT NULL AND parent_id = pr.parent_id) as has_parent
+                        pr.parent_id
                     FROM students s
                     LEFT JOIN parent_children_mapping pcm ON s.student_id = pcm.student_id
-                    LEFT JOIN parent_registry pr ON pcm.parent_id = pr.parent_id
+                    LEFT JOIN parent_registry pr ON pcm.parent_id = pr.parent_id AND pr.parent_phone IS NOT NULL
                     WHERE (s.name LIKE ? OR s.student_id = ?) AND s.school_id = ?
-                    LIMIT 1
+                    LIMIT 5
                 `;
-                db.getDB().get(sql, [`%${studentName}%`, studentName, schoolId], (err, row) => {
-                    if (err) logger.error({ err }, '❌ [BRIDGE] Parent lookup query failed');
-                    resolve(row);
+                db.getDB().all(sql, [`%${studentName}%`, studentName, schoolId], (err, rows) => {
+                    if (err) {
+                        logger.error({ err }, '❌ [BRIDGE] Query failed');
+                        resolve([]);
+                    } else {
+                        logger.info({ studentName, rowCount: rows?.length || 0, rows }, '🔍 [BRIDGE] Students found');
+                        // Find best match
+                        const exactMatch = rows?.find((r: any) => r.student_name?.toLowerCase() === studentName.toLowerCase());
+                        resolve(exactMatch || rows?.[0] || null);
+                    }
                 });
             });
 
-            if (!mapping) {
-                logger.warn({ studentName, schoolId }, '⚠️ [BRIDGE] Student not found in master students table');
+            // 2. If not found in students, check TA setup mappings
+            if (!mapping || !mapping.parent_phone) {
+                logger.warn({ studentName, mapping }, '⚠️ [BRIDGE] No match or no parent in students table, trying TA setup');
                 
-                // Fallback: Check if student exists in TA setup mappings
-                const setupMapping: any = await new Promise((resolve) => {
-                    db.getDB().get(
-                        `SELECT student_name, class_level FROM class_student_mapping WHERE (student_name LIKE ? OR student_id = ?) AND school_id = ? LIMIT 1`,
-                        [`%${studentName}%`, studentName, schoolId],
-                        (err, row) => resolve(row)
-                    );
+                // Check TA setup class_student_mapping + parent linking
+                const setupData: any = await new Promise((resolve) => {
+                    const sql = `
+                        SELECT 
+                            csm.student_name,
+                            csm.class_level,
+                            pr.parent_phone,
+                            pr.parent_name,
+                            pr.parent_id
+                        FROM class_student_mapping csm
+                        LEFT JOIN parent_children_mapping pcm ON csm.student_id = pcm.student_id
+                        LEFT JOIN parent_registry pr ON pcm.parent_id = pr.parent_id AND pr.parent_phone IS NOT NULL
+                        WHERE (csm.student_name LIKE ? OR csm.student_id = ?) AND csm.school_id = ?
+                        LIMIT 5
+                    `;
+                    db.getDB().all(sql, [`%${studentName}%`, studentName, schoolId], (err, rows) => {
+                        if (err) {
+                            logger.error({ err }, '❌ [BRIDGE] Setup query failed');
+                            resolve(null);
+                        } else {
+                            logger.info({ studentName, setupRows: rows?.length || 0 }, '🔍 [BRIDGE] Setup mapping found');
+                            const exactMatch = rows?.find((r: any) => r.student_name?.toLowerCase() === studentName.toLowerCase());
+                            resolve(exactMatch || rows?.[0] || null);
+                        }
+                    });
                 });
 
-                if (setupMapping) {
-                    return { 
-                        success: false, 
-                        agentFeedback: `I found ${setupMapping.student_name} in the ${setupMapping.class_level} register, but no parent is linked yet.`,
-                        summary: `Student found in register but lacks parent contact info.` 
-                    };
+                if (setupData) {
+                    mapping = setupData;
                 }
+            }
 
-                return { success: false, agentFeedback: 'Student lookup failed.', summary: `Could not find any student named "${studentName}".` };
+            if (!mapping) {
+                logger.warn({ studentName, schoolId }, '⚠️ [BRIDGE] Student not found anywhere');
+                return { success: false, agentFeedback: `Could not find student "${studentName}" in the system.`, summary: 'Student not found.' };
             }
 
             if (!mapping.parent_phone) {
-                logger.warn({ studentName, studentId: mapping.student_id }, '⚠️ [BRIDGE] Student found but no parent phone linked');
+                logger.warn({ studentName, mapping }, '⚠️ [BRIDGE] Student found but no parent phone');
                 return { 
                     success: false, 
-                    agentFeedback: `I found ${studentName} (${mapping.class_level}), but his parent's contact information is missing from the registry.`,
-                    summary: `No parent phone number linked for ${studentName}.` 
+                    agentFeedback: `Found ${mapping.student_name || studentName} in the records, but no parent contact info is linked. Please add parent contact in the parent registry.`,
+                    summary: `Student found but no parent phone linked.` 
                 };
             }
 
-            const { student_id, parent_phone, parent_name } = mapping;
-            logger.info({ student_id, parent_phone, parent_name }, '✅ [BRIDGE] Parent resolved');
+            const { parent_phone, parent_name, student_id } = mapping;
+            logger.info({ parent_phone, parent_name, student_id }, '✅ [BRIDGE] Parent resolved');
 
             // 2. Fetch student performance data for personalization
             const topSubject: any = await new Promise((resolve) => {
@@ -199,10 +225,16 @@ export class AgentBridgeService {
 
             // 3. Invoke PA
             const pa = new ParentAgent();
+            
+            // Build instruction for PA - include admin's specific instruction if provided
+            const instruction = adminInstruction 
+                ? `\nADMIN INSTRUCTION: ${adminInstruction}`
+                : '';
+            
             const ghostMsg = {
                 id: uuidv4(),
                 from: parent_phone,
-                body: `SYSTEM COMMAND: PROACTIVE_CHECKUP\nStudent: ${studentName}\nReason: ${reason}\nStrengths: Excelling in ${subjectName}\nTask: Reach out to parent ${parent_name} and provide a formal Work Report.`,
+                body: `SYSTEM COMMAND: PROACTIVE_CHECKUP\nStudent: ${studentName}\nReason: ${reason}\nStrengths: Excelling in ${subjectName}${instruction}\nTask: Reach out to parent ${parent_name} about their child's absence. Be professional, express concern, and ask if there's anything the school can do to help. Provide a Work Report.`,
                 context: 'PA',
                 identity: { schoolId, userId: student_id, role: 'parent', name: parent_name }
             };
@@ -211,16 +243,20 @@ export class AgentBridgeService {
             const checkupMessage = paRes.reply_text;
             const agentReport = (paRes.action_payload as any)?.report || 'Checkup message sent successfully.';
 
-            // 4. Deliver & Record
+            // 4. Deliver & Record - Save to PA memory for conversation continuity
             await messenger.sendPush(schoolId, parent_phone, checkupMessage);
-            await HistoryManager.recordMessage(schoolId, student_id, parent_phone, 'PA', 
-                { type: 'text', body: `[PROACTIVE CHECKUP] ${checkupMessage}`, timestamp: Date.now(), source: 'system' },
-                { action: 'PROACTIVE_ENGAGEMENT', status: 'COMPLETED' });
+            
+            // Record in history using parent's user_id (not student's) for FK compliance
+            // The history will track by parent_phone which is the actual contact
+            await HistoryManager.recordMessage(schoolId, mapping.parent_id, parent_phone, 'PA', 
+                { type: 'text', body: `[PROACTIVE CHECKUP - ${studentName} ABSENT] ${checkupMessage}`, timestamp: Date.now(), source: 'system' },
+                { action: 'PROACTIVE_ENGAGEMENT', status: 'SENT', studentName: studentName, reason: reason } as any
+            );
 
             return { 
                 success: true, 
                 agentFeedback: agentReport,
-                summary: `Checkup sent to ${parent_name}.` 
+                summary: `Checkup sent to ${parent_name}.`
             };
 
         } catch (error) {
