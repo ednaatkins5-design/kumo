@@ -30,6 +30,8 @@ import fs from 'fs';
 import path from 'path';
 
 import { CONSTANTS, ValidSchoolType } from '../../config/constants';
+import { getUniverseTemplate } from '../../config/universe-templates';
+import { detectCountryFromPhone } from '../../utils/country-detection';
 
 const SETUP_VALIDATOR = {
     isValidSchoolType(value: any): value is ValidSchoolType {
@@ -594,7 +596,15 @@ export class SchoolAdminAgent extends BaseAgent {
             // 🚀 NEW: SUPPORT MULTIPLE BACKEND ACTIONS
             const actionsToProcess = [];
             if (output.action_required !== 'NONE') {
-                actionsToProcess.push({ action: output.action_required, payload: output.action_payload });
+                // ⚠️ CRITICAL: If action requires payload but payload is empty, log warning and skip
+                const requiresPayload = ['MANAGE_STAFF', 'REGISTER_STUDENT', 'UPDATE_CONFIG', 'LOCK_RESULTS', 'RELEASE_RESULTS'].includes(output.action_required);
+                if (requiresPayload && (!output.action_payload || Object.keys(output.action_payload).length === 0)) {
+                    logger.error({ action: output.action_required, payload: output.action_payload }, '🔴 ACTION SKIPPED: Action requires payload but none provided');
+                    output.reply_text = "I understood you want to add a teacher, but I need the teacher's name and phone number. Please provide both.";
+                    output.action_required = 'NONE';
+                } else {
+                    actionsToProcess.push({ action: output.action_required, payload: output.action_payload });
+                }
             }
             if (parsed.backend_actions && Array.isArray(parsed.backend_actions)) {
                 for (const action of parsed.backend_actions) {
@@ -610,7 +620,39 @@ export class SchoolAdminAgent extends BaseAgent {
                 const currentPayload = task.payload || {};
                 const payload = currentPayload as any;
 
-                logger.info({ currentAction }, '🛠️ Processing SA Action');
+                logger.info({ currentAction, payload }, '🛠️ Processing SA Action');
+
+                if (currentAction === 'REGISTER_TEACHER' || (currentAction === 'MANAGE_STAFF' && payload.action === 'ADD')) {
+                    logger.info({ currentAction, payload }, '🛠️ Processing TEACHER REGISTRATION action');
+                    
+                    // Check if payload has required fields
+                    if (!payload.name || !payload.phone) {
+                        logger.error({ payload, action: currentAction }, '🔴 TEACHER REGISTRATION FAILED: Missing name or phone in payload');
+                        output.reply_text = "I need the teacher's name and phone number to register them. Please provide both.";
+                        output.action_required = 'NONE';
+                        continue;
+                    }
+
+                    try {
+                        // Execute teacher registration
+                        const regResult = await this.executeTeacherRegistration(schoolId, payload);
+                        if (regResult.success) {
+                            if (!systemActionResult) systemActionResult = { results: [] };
+                            if (!Array.isArray(systemActionResult.results)) systemActionResult.results = [];
+                            systemActionResult.results.push({ type: 'TEACHER_REGISTRATION', ...regResult });
+                        } else {
+                            const errorResult = { success: false, error: regResult.error };
+                            output.reply_text = await this.synthesizeActionResult('REGISTER_TEACHER_FAILED', errorResult, "Registration failed.", contextPrompt, systemPrompt, SA_TA_CONFIG);
+                            output.action_required = 'NONE';
+                            return output;
+                        }
+                    } catch (error: any) {
+                        logger.error({ error, payload }, 'REGISTER_TEACHER failed');
+                        output.reply_text = "Failed to register teacher. Please try again.";
+                        output.action_required = 'NONE';
+                        return output;
+                    }
+                }
 
                 if (currentAction === 'RELEASE_RESULTS') {
                     const classLevel = payload?.class_level;
@@ -797,6 +839,16 @@ export class SchoolAdminAgent extends BaseAgent {
                 }
 
                 if (currentAction === 'REGISTER_TEACHER' || (currentAction === 'MANAGE_STAFF' && payload.action === 'ADD')) {
+                    logger.info({ currentAction, payload }, '🛠️ Processing TEACHER REGISTRATION action');
+                    
+                    // Check if payload has required fields
+                    if (!payload.name || !payload.phone) {
+                        logger.error({ payload, action: currentAction }, '🔴 TEACHER REGISTRATION FAILED: Missing name or phone in payload');
+                        output.reply_text = "I need the teacher's name and phone number to register them. Please provide both.";
+                        output.action_required = 'NONE';
+                        continue;
+                    }
+                    
                     const regResult = await this.executeTeacherRegistration(schoolId, payload);
                     if (regResult.success) {
                         if (!systemActionResult) systemActionResult = { results: [] };
@@ -1833,9 +1885,16 @@ export class SchoolAdminAgent extends BaseAgent {
             const { TASetupRepository } = require('../../db/repositories/ta-setup.repo');
             await TASetupRepository.initSetup(teacherId, schoolId, 'Unknown');
 
-            const welcome = `Welcome ${name}! You've been registered as a teacher for this school. 
+            const welcome = `Welcome ${name}! 🎉 You've been registered as a teacher for this school.
 
-We'll complete your setup shortly. In the meantime, your Access Token is: *${token}*`;
+Your Access Token is: *${token}*
+
+📝 NEXT STEP: Please reply with your class and subjects. For example:
+- "Primary 4 Mathematics"
+- "JSS 2 Physics, Chemistry, Biology"
+
+This will allow you to start entering marks and managing students.`;
+
             await messenger.sendPush(schoolId, normalizedPhone, welcome);
 
             return { success: true, name, token, phone: normalizedPhone };
@@ -2225,7 +2284,33 @@ Your child, *${student_name}*, has been successfully registered. As a parent, yo
             }
             
             const cleaned = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
-            const parsed = JSON.parse(cleaned) as SetupSAOutput;
+            
+            // Better JSON parsing with error recovery
+            let parsed: SetupSAOutput;
+            try {
+                parsed = JSON.parse(cleaned) as SetupSAOutput;
+            } catch (parseError: any) {
+                logger.error({ schoolId, error: parseError.message, jsonSnippet: cleaned.substring(0, 500) }, 
+                    '❌ [SA SETUP] JSON parse failed, attempting recovery...');
+                
+                // Try to fix common JSON issues
+                let fixed = cleaned
+                    .replace(/,\s*}/g, '}')  // Remove trailing commas
+                    .replace(/,\s*]/g, ']')  // Remove trailing commas in arrays
+                    .replace(/'/g, '"')      // Replace single quotes with double quotes
+                    .replace(/(\w+):/g, '"$1":')  // Quote unquoted keys
+                    .replace(/\n/g, ' ')     // Remove newlines
+                    .replace(/\s+/g, ' ');   // Collapse whitespace
+                
+                try {
+                    parsed = JSON.parse(fixed) as SetupSAOutput;
+                    logger.info({ schoolId }, '✅ [SA SETUP] JSON recovered successfully');
+                } catch (retryError: any) {
+                    logger.error({ schoolId, error: retryError.message, failedJson: cleaned }, 
+                        '❌ [SA SETUP] JSON recovery failed');
+                    throw new Error(`Failed to parse LLM response as JSON: ${parseError.message}`);
+                }
+            }
 
             // 🚨 CRITICAL: Log LLM response detail
             logger.info({
@@ -2629,7 +2714,8 @@ Your child, *${student_name}*, has been successfully registered. As a parent, yo
                 logger.info({ schoolId, payload: JSON.stringify(parsed.internal_payload) }, 
                     '🚀 [SETUP_SCHOOL] Processing unified school setup');
                 
-                const payload = parsed.internal_payload;
+                // ✅ Merge with config_draft to ensure school_type and other prefilled data is available
+                const payload = { ...configDraft, ...parsed.internal_payload };
                 
                 // ① Validate school_type is explicitly provided (no defaults allowed)
                 const schoolTypeValidation = SETUP_VALIDATOR.validateSchoolType(payload.school_type);
@@ -2672,7 +2758,9 @@ Your child, *${student_name}*, has been successfully registered. As a parent, yo
                     }
                     
                     // 🧠 INTELLIGENT: Standardize subject names for consistency
-                    let subjectsUniverse = payload.universe_config?.subjects_universe || [];
+                    // Get subjects from either format (universe_config or school_structure)
+                    let subjectsUniverse = payload.universe_config?.subjects_universe || 
+                                          payload.school_structure?.subjects || [];
                     if (subjectsUniverse.length > 0) {
                         const { nameStandardizer } = await import('../../services/name-standardization.service');
                         const standardizedSubjects = nameStandardizer.standardizeSubjects(subjectsUniverse);
@@ -2680,7 +2768,7 @@ Your child, *${student_name}*, has been successfully registered. As a parent, yo
                         
                         logger.info({
                             schoolId,
-                            originalSubjects: payload.universe_config?.subjects_universe,
+                            originalSubjects: payload.universe_config?.subjects_universe || payload.school_structure?.subjects,
                             standardizedSubjects: subjectsUniverse
                         }, '🧠 Standardized subject names for school universe');
                     }
@@ -3333,6 +3421,98 @@ Please review and reply with your decision (APPROVED/DENIED/CLARIFY).
      */
     private buildResultsNotificationMessage(classLevel: string, childNames: string): string {
         return `📢 *Results Available*\n\nResults for *${classLevel}* are now available!\n\nReply 'RESULTS' to view ${childNames}'s report card.`;
+    }
+
+    /**
+     * Send personalized setup welcome message
+     * Called when WhatsApp connection is established for a new school
+     */
+    static async sendSetupWelcome(schoolId: string): Promise<void> {
+        logger.info({ schoolId }, '🎉 [SA] Preparing setup welcome message');
+        
+        try {
+            // 1. Check if welcome already sent
+            const state = await SetupRepository.getSetupState(schoolId);
+            if (state?.config_draft?.welcome_sent) {
+                logger.info({ schoolId }, 'Welcome already sent, skipping');
+                return;
+            }
+
+            // 2. Get school info
+            const school: any = await new Promise((resolve) => {
+                db.getDB().get(
+                    `SELECT id, name, admin_phone, school_type FROM schools WHERE id = ?`,
+                    [schoolId],
+                    (err, row) => resolve(row)
+                );
+            });
+
+            if (!school || !school.admin_phone) {
+                logger.error({ schoolId }, '❌ [SA] No school or admin phone found');
+                return;
+            }
+
+            // 3. Detect country and get universe template
+            const country = detectCountryFromPhone(school.admin_phone);
+            const schoolType = school.school_type || 'SECONDARY';
+            const templateObj = getUniverseTemplate(schoolType, country);
+            const template = templateObj as { classes: string[]; subjects: string[] };
+
+            // 4. Populate config_draft
+            const configDraft = {
+                name: school.name,
+                school_type: schoolType,
+                country: country,
+                classes: template.classes,
+                subjects: template.subjects,
+                welcome_sent: true
+            };
+            
+            await SetupRepository.updateSetup(schoolId, { config_draft: configDraft });
+            logger.info({ schoolId, schoolType, country, classesCount: template.classes.length }, 
+                '📋 [SA] config_draft populated with prefilled universe');
+
+            // 5. Generate personalized welcome message
+            const countryInfo = country !== 'Nigeria' ? ` in ${country}` : '';
+            const classList = template.classes.join(', ');
+            const subjectList = template.subjects.slice(0, 6).join(', ');
+            const moreSubjects = template.subjects.length > 6 ? `, and ${template.subjects.length - 6} more` : '';
+
+            const welcomeMessage = `🎉 *Welcome to KUMO, ${school.name}!*
+
+${schoolType === 'PRIMARY' ? '🏫' : schoolType === 'SECONDARY' ? '🎓' : '🏫🎓'} I see you registered as a *${schoolType}* school${countryInfo}.
+
+📚 *I've prepared a suggested setup:*
+*Classes*: ${classList}
+
+📖 *Subjects*: ${subjectList}${moreSubjects}
+
+*What should I call you?*
+
+Once I know your name, we can review this setup together - just say yes to keep it, or tell me what to change!`;
+
+            // 6. Send welcome message
+            const adminJid = school.admin_phone.includes('@') 
+                ? school.admin_phone 
+                : school.admin_phone + '@s.whatsapp.net';
+
+            await messenger.sendPush(schoolId, adminJid, welcomeMessage);
+            logger.info({ schoolId, adminPhone: school.admin_phone }, '✅ [SA] Welcome message sent');
+
+            // 7. Record in history (so LLM remembers this was sent)
+            await HistoryManager.recordMessage(
+                schoolId,
+                undefined,
+                school.admin_phone,
+                'SA',
+                { type: 'text', body: welcomeMessage, timestamp: Date.now(), source: 'system' },
+                { action: 'SETUP_WELCOME', status: 'SENT' }
+            );
+            logger.info({ schoolId }, '✅ [SA] Welcome recorded in history');
+
+        } catch (error) {
+            logger.error({ error, schoolId }, '❌ [SA] Failed to send setup welcome');
+        }
     }
 }
 

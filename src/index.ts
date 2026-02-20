@@ -1,7 +1,7 @@
 import { db } from './db';
 import { logger } from './utils/logger';
 import { whatsappManager } from './core/transport/multi-socket-manager';
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
@@ -154,7 +154,10 @@ async function main() {
                         origin.startsWith('http://127.0.0.1:') ||
                         origin.startsWith('http://192.168.') ||
                         origin.startsWith('http://10.') ||
-                        origin.startsWith('http://172.')) {
+                        origin.startsWith('http://172.') ||
+                        origin.includes('cloudshell.dev') ||
+                        origin.includes('ngrok-free.dev') ||
+                        origin.includes('ngrok.io')) {
                         return callback(null, true);
                     }
                 }
@@ -177,6 +180,192 @@ async function main() {
         app.use('/api/auth', authRouter);
         app.use('/api/support', supportRouter);
 
+        // TEST ENDPOINT: Trigger SA Flow (No Auth - must be before authenticateToken)
+        app.post('/api/test/trigger-sa', async (req: Request, res: Response) => {
+            try {
+                const { from, body, type = 'text' } = req.body;
+                
+                if (!from || !body) {
+                    return res.status(400).json({ success: false, error: 'Missing from or body' });
+                }
+
+                logger.info({ from, body, type }, '📱 [TEST] Simulating WhatsApp message');
+
+                // Import and use the dispatcher
+                const { AgentDispatcher } = await import('./core/dispatcher');
+                const { v4: uuidv4 } = await import('uuid');
+
+                // Create a mock routed message
+                const message = {
+                    id: uuidv4(),
+                    from: from,
+                    to: 'school',
+                    body: body,
+                    type: type,
+                    timestamp: Date.now(),
+                    source: 'user' as const,
+                    context: 'SA' as const,
+                    schoolId: '3876fd28-bfe7-4450-bc69-bad51d533330', // testskull
+                    identity: {
+                        userId: '8b862509-e8f1-4add-846b-1245c856ec68',
+                        phone: from,
+                        role: 'admin' as const,
+                        schoolId: '3876fd28-bfe7-4450-bc69-bad51d533330',
+                        name: 'Admin'
+                    }
+                };
+
+                const dispatcher = new AgentDispatcher();
+                const response = await dispatcher.dispatch(message);
+
+                logger.info({ response }, '📱 [TEST] SA Response');
+
+                res.json({ success: true, response });
+            } catch (error: any) {
+                logger.error({ error: error?.message, stack: error?.stack }, '❌ [TEST] SA trigger failed');
+                res.status(500).json({ success: false, error: error.message, stack: error?.stack });
+            }
+        });
+
+        // TEST ENDPOINT: Trigger TA Flow (Teacher Assistant)
+        app.post('/api/test/trigger-ta', async (req: Request, res: Response) => {
+            try {
+                const { from, body, type = 'text' } = req.body;
+                
+                if (!from || !body) {
+                    return res.status(400).json({ success: false, error: 'Missing from or body' });
+                }
+
+                logger.info({ from, body, type }, '📚 [TEST] Simulating TA WhatsApp message');
+
+                // Import and use the dispatcher
+                const { AgentDispatcher } = await import('./core/dispatcher');
+                const { v4: uuidv4 } = await import('uuid');
+                const { PhoneNormalizer } = await import('./utils/phone-normalizer');
+
+                // Normalize the phone number
+                const normalizedFrom = PhoneNormalizer.normalize(from);
+
+                // Check if user is a teacher
+                const teacher: any = await new Promise((resolve) => {
+                    db.getDB().get(
+                        `SELECT id, name, role, school_id FROM users WHERE phone = ? AND role = 'teacher'`,
+                        [normalizedFrom],
+                        (err, row) => resolve(row)
+                    );
+                });
+
+                // Create a mock routed message for TA
+                const message = {
+                    id: uuidv4(),
+                    from: normalizedFrom,
+                    to: 'school',
+                    body: body,
+                    type: type,
+                    timestamp: Date.now(),
+                    source: 'user' as const,
+                    context: 'TA' as const,
+                    schoolId: teacher?.school_id || '3876fd28-bfe7-4450-bc69-bad51d533330',
+                    identity: teacher ? {
+                        userId: teacher.id,
+                        phone: normalizedFrom,
+                        role: 'teacher' as const,
+                        schoolId: teacher.school_id,
+                        name: teacher.name
+                    } : undefined
+                };
+
+                const dispatcher = new AgentDispatcher();
+                const response = await dispatcher.dispatch(message);
+
+                logger.info({ response }, '📚 [TEST] TA Response');
+
+                res.json({ success: true, response });
+            } catch (error: any) {
+                logger.error({ error: error?.message, stack: error?.stack }, '❌ [TEST] TA trigger failed');
+                res.status(500).json({ success: false, error: error.message, stack: error?.stack });
+            }
+        });
+
+        // TEST ENDPOINT: Trigger PA Flow (Parent Agent)
+        app.post('/api/test/trigger-pa', async (req: Request, res: Response) => {
+            try {
+                const { from, body, type = 'text', identified = false } = req.body;
+                
+                if (!from || !body) {
+                    return res.status(400).json({ success: false, error: 'Missing from or body' });
+                }
+
+                logger.info({ from, body, type, identified }, '👨‍👩‍👧 [TEST] Simulating PA WhatsApp message');
+
+                // Import and use the dispatcher
+                const { AgentDispatcher } = await import('./core/dispatcher');
+                const { v4: uuidv4 } = await import('uuid');
+                const { PhoneNormalizer } = await import('./utils/phone-normalizer');
+
+                // Normalize the phone number
+                const normalizedFrom = PhoneNormalizer.normalize(from);
+
+                // Check if user is an identified parent
+                // Parents added by admin are in parent_registry (NOT users table)
+                let parent: any = null;
+                if (identified) {
+                    // First check parent_registry (where admin-added parents are)
+                    parent = await new Promise<any>((resolve) => {
+                        db.getDB().get(
+                            `SELECT parent_id as id, parent_name as name, school_id FROM parent_registry WHERE parent_phone = ? AND is_active = 1`,
+                            [normalizedFrom],
+                            (err, row) => resolve(row)
+                        );
+                    });
+                    // If not found, check users table (fallback for other parent types)
+                    if (!parent) {
+                        parent = await new Promise<any>((resolve) => {
+                            db.getDB().get(
+                                `SELECT id, name, role, school_id FROM users WHERE phone = ? AND role = 'parent'`,
+                                [normalizedFrom],
+                                (err, row) => resolve(row)
+                            );
+                        });
+                    }
+                }
+
+                // Get test school
+                const testSchoolId = '3876fd28-bfe7-4450-bc69-bad51d533330';
+
+                // Create a mock routed message for PA
+                const message = {
+                    id: uuidv4(),
+                    from: normalizedFrom,
+                    to: 'school',
+                    body: body,
+                    type: type,
+                    timestamp: Date.now(),
+                    source: 'user' as const,
+                    context: 'PA' as const,
+                    schoolId: parent?.school_id || testSchoolId,
+                    identity: parent ? {
+                        userId: parent.id,
+                        phone: normalizedFrom,
+                        role: 'parent' as const,
+                        schoolId: parent.school_id,
+                        name: parent.name
+                    } : undefined,
+                    isIdentifiedParent: identified || !!parent
+                };
+
+                const dispatcher = new AgentDispatcher();
+                const response = await dispatcher.dispatch(message);
+
+                logger.info({ response }, '👨‍👩‍👧 [TEST] PA Response');
+
+                res.json({ success: true, response });
+            } catch (error: any) {
+                logger.error({ error: error?.message, stack: error?.stack }, '❌ [TEST] PA trigger failed');
+                res.status(500).json({ success: false, error: error.message, stack: error?.stack });
+            }
+        });
+
         // 2. Authentication Middleware (Applies to all routes below)
         app.use('/api', authenticateToken);
 
@@ -193,6 +382,26 @@ async function main() {
                 activeConnections: whatsappManager.getActiveConnections()
             });
         });
+
+        // --- Static Files (Frontend) ---
+        // Serve static files from frontend dist directory
+        const frontendDistPath = path.join(__dirname, '../frontend/app/dist');
+        if (fs.existsSync(frontendDistPath)) {
+            app.use(express.static(frontendDistPath));
+            
+            // Serve index.html for all non-API routes (SPA fallback)
+            app.use((req: Request, res: Response, next: NextFunction) => {
+                if (!req.path.startsWith('/api')) {
+                    res.sendFile(path.join(frontendDistPath, 'index.html'));
+                } else {
+                    next();
+                }
+            });
+            
+            logger.info('Serving frontend static files from: ' + frontendDistPath);
+        } else {
+            logger.warn('Frontend dist directory not found at: ' + frontendDistPath);
+        }
 
         const PORT = process.env.PORT || 3000;
         const HOST = '0.0.0.0'; // Bind to all interfaces for mobile access
@@ -217,7 +426,6 @@ async function main() {
             console.log(`⚙️  School Setup API at: /api/setup/*`);
             console.log(`🔐 Auth API at: /api/auth/*`);
         });
-        // ----------------------
 
         const { getFileCleanupService } = await import('./services/file-cleanup');
         cleanupService = getFileCleanupService();

@@ -1,5 +1,6 @@
 export type SAActionType = 
     | 'NONE'
+    | 'MANAGE_STAFF'
     | 'LOCK_RESULTS'
     | 'UNLOCK_RESULTS'
     | 'RELEASE_RESULTS'

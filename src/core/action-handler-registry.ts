@@ -521,6 +521,61 @@ class EscalatePaymentHandler implements ActionHandler {
     }
 }
 
+class VerifyParentTokenHandler implements ActionHandler {
+    async execute(ctx: ActionHandlerContext): Promise<any> {
+        const { output, message, schoolId } = ctx;
+        const { token } = output.action_payload || {};
+        
+        if (!token) {
+            output.reply_text = "I need the access token to verify your identity.";
+            output.action_required = 'NONE';
+            return output;
+        }
+
+        try {
+            const { ParentRepository } = await import('../db/repositories/parent.repo');
+            
+            const parentInfo = await ParentRepository.validateAccessToken(token.toUpperCase(), schoolId);
+            
+            if (!parentInfo) {
+                output.reply_text = "❌ The access token you provided is invalid or has expired. Please check with your child's school for a valid token.";
+                output.action_required = 'NONE';
+                return output;
+            }
+
+            // Update parent's phone with the current session phone if not already linked
+            await new Promise<void>((resolve, reject) => {
+                db.getDB().run(
+                    `UPDATE parent_registry SET parent_phone = ? WHERE parent_id = ? AND school_id = ?`,
+                    [message.from, parentInfo.parentId, schoolId],
+                    (err) => err ? reject(err) : resolve()
+                );
+            });
+
+            const childrenList = parentInfo.studentIds.length > 0 
+                ? parentInfo.studentIds.join(', ')
+                : 'No children linked yet';
+
+            output.reply_text = `✅ Access verified successfully!\n\nWelcome, ${parentInfo.parentName}!\n\nYour linked children: ${childrenList}\n\nYou can now ask about your child's results, attendance, or fees.`;
+            output.action_payload = {
+                ...output.action_payload,
+                verified: true,
+                parent_id: parentInfo.parentId,
+                parent_name: parentInfo.parentName,
+                children: parentInfo.studentIds
+            };
+            output.action_required = 'NONE';
+            
+            logger.info({ parentId: parentInfo.parentId, phone: message.from, schoolId }, 'Parent token verified');
+        } catch (error) {
+            logger.error({ error, token, schoolId }, 'VERIFY_PARENT_TOKEN failed');
+            output.reply_text = "I couldn't verify your token. Please try again or contact the school.";
+            output.action_required = 'NONE';
+        }
+        return output;
+    }
+}
+
 /**
  * MAIN REGISTRY: Maps action names to handler instances
  */
@@ -539,6 +594,7 @@ export const ACTION_HANDLERS: Record<string, ActionHandler> = {
     // PA Actions
     'DELIVER_STUDENT_PDF': new DeliverStudentPDFHandler(),
     'ESCALATE_PAYMENT': new EscalatePaymentHandler(),
+    'VERIFY_PARENT_TOKEN': new VerifyParentTokenHandler(),
     
     // Add more handlers as needed
     // Phase 4 continues to migrate other handlers...
@@ -566,28 +622,32 @@ export class ActionHandlerRegistry {
         
         const actionName = output.action_required;
         
-        const userRole = (message.identity?.role || message.fromRole) as UserRole | null;
-        const intentClear = output.intent_clear === true;
-        const authorityAcknowledged = output.authority_acknowledged === true;
-        
-        const authResult = ActionAuthorizer.authorize(
-            actionName,
-            userRole,
-            intentClear,
-            authorityAcknowledged
-        );
-        
-        if (!authResult.authorized) {
-            logger.warn({ 
-                action: actionName, 
-                userRole, 
-                reason: authResult.reason,
-                from: message.from 
-            }, 'Action authorization failed');
+        // Special case: VERIFY_PARENT_TOKEN and VERIFY_TEACHER_TOKEN don't require prior authorization
+        // They are authentication actions that verify the user's identity
+        if (actionName !== 'VERIFY_PARENT_TOKEN' && actionName !== 'VERIFY_TEACHER_TOKEN') {
+            const userRole = (message.identity?.role || message.fromRole) as UserRole | null;
+            const intentClear = output.intent_clear === true;
+            const authorityAcknowledged = output.authority_acknowledged === true;
             
-            output.reply_text = `I'm sorry, you're not authorized to perform this action. ${authResult.reason || ''}`;
-            output.action_required = 'NONE';
-            return output;
+            const authResult = ActionAuthorizer.authorize(
+                actionName,
+                userRole,
+                intentClear,
+                authorityAcknowledged
+            );
+            
+            if (!authResult.authorized) {
+                logger.warn({ 
+                    action: actionName, 
+                    userRole, 
+                    reason: authResult.reason,
+                    from: message.from 
+                }, 'Action authorization failed');
+                
+                output.reply_text = `I'm sorry, you're not authorized to perform this action. ${authResult.reason || ''}`;
+                output.action_required = 'NONE';
+                return output;
+            }
         }
         
         const handler = await this.getHandler(actionName);

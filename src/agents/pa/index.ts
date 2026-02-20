@@ -350,11 +350,30 @@ export class ParentAgent extends BaseAgent {
         if (bodyLower.includes('pat-kumo-')) {
             const tokenMatch = message.body.match(/PAT-KUMO-[A-Z0-9-]+/i);
             if (tokenMatch) {
+                // Send immediate acknowledgement
+                const ackMessage = "Welcome! Thank you for sharing your access code. I'm verifying it now to keep your information secure.";
+                await messenger.sendPush(schoolId, message.from, ackMessage);
+                
+                // Execute the verification action
+                const { ActionHandlerRegistry } = await import('../../core/action-handler-registry');
+                const tokenResponse = await ActionHandlerRegistry.executeAction({
+                    output: {
+                        action_required: 'VERIFY_PARENT_TOKEN',
+                        action_payload: { token: tokenMatch[0] }
+                    },
+                    message,
+                    schoolId
+                });
+                
+                // Send the verification result
+                if (tokenResponse.reply_text) {
+                    await messenger.sendPush(schoolId, message.from, tokenResponse.reply_text);
+                }
+                
                 return {
                     agent: 'PA',
-                    reply_text: "Welcome! Thank you for sharing your access code. I'm verifying it now to keep your information secure.",
-                    action_required: 'VERIFY_PARENT_TOKEN',
-                    action_payload: { token: tokenMatch[0] },
+                    reply_text: "",
+                    action_required: 'NONE',
                     confidence_score: 1.0,
                     session_active: false
                 };

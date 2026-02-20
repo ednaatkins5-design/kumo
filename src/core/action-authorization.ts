@@ -263,6 +263,13 @@ export const ACTION_REGISTRY: Record<string, ActionSpec> = {
         description: 'Register new student in system',
         conversational: true
     },
+    'MANAGE_STAFF': {
+        action: 'MANAGE_STAFF',
+        agent: 'SA',
+        required_role: 'admin',
+        description: 'Add or remove teachers and staff',
+        conversational: true
+    },
     'PROPOSE_AMENDMENT': {
         action: 'PROPOSE_AMENDMENT',
         agent: 'SA',
