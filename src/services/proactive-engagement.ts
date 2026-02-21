@@ -246,9 +246,9 @@ export class AgentBridgeService {
             // 4. Deliver & Record - Save to PA memory for conversation continuity
             await messenger.sendPush(schoolId, parent_phone, checkupMessage);
             
-            // Record in history using parent's user_id (not student's) for FK compliance
-            // The history will track by parent_phone which is the actual contact
-            await HistoryManager.recordMessage(schoolId, mapping.parent_id, parent_phone, 'PA', 
+            // Record in messages table - skip user_id (use undefined) to avoid FK issues with parent IDs
+            // The from_phone is sufficient to identify the parent
+            await HistoryManager.recordMessage(schoolId, undefined, parent_phone, 'PA', 
                 { type: 'text', body: `[PROACTIVE CHECKUP - ${studentName} ABSENT] ${checkupMessage}`, timestamp: Date.now(), source: 'system' },
                 { action: 'PROACTIVE_ENGAGEMENT', status: 'SENT', studentName: studentName, reason: reason } as any
             );

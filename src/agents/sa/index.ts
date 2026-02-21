@@ -1779,6 +1779,14 @@ export class SchoolAdminAgent extends BaseAgent {
                 // Use absentees from escalation context - this is the authoritative source
                 let absentees = escContext.absentees || [];
                 
+                // DEBUG: Log what we're using
+                logger.info({ 
+                    hasEscalation: !!pendingEscalation, 
+                    escContextAbsentees: escContext.absentees,
+                    llmOutputAbsentees: output.action_payload?.absentees,
+                    usingAbsentees: absentees 
+                }, '🔍 [ENGAGE_PARENTS] Absentees source');
+                
                 // If no absentees in escalation context, fall back to LLM output (with validation)
                 if (absentees.length === 0) {
                     absentees = output.action_payload?.absentees || 
@@ -1820,6 +1828,18 @@ export class SchoolAdminAgent extends BaseAgent {
                     }
 
                     const successCount = results.filter(r => r.success).length;
+                    
+                    // ✅ FIX: Replace hallucinated reply with actual results before synthesis
+                    // The LLM's original reply_text may contain hallucinated student names
+                    // Use the actual results instead
+                    const successfullyEngaged = results.filter(r => r.success).map(r => r.name);
+                    const failedStudents = results.filter(r => !r.success).map(r => ({ name: r.name, reason: r.feedback }));
+                    
+                    if (successfullyEngaged.length > 0) {
+                        output.reply_text = `Parent engagement completed. Successfully contacted: ${successfullyEngaged.join(', ')}.`;
+                    } else if (failedStudents.length > 0) {
+                        output.reply_text = `Parent engagement attempted but failed for: ${failedStudents.map(f => f.name).join(', ')}. Reasons: ${failedStudents.map(f => f.reason).join('; ')}`;
+                    }
                     
                     // ✅ SMARTER SYNTHESIS: Provide the specific feedback to the LLM
                     if (successCount === 0 && results.length > 0) {

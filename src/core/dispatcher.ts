@@ -215,6 +215,43 @@ export class AgentDispatcher {
                 output = await this.pa.handle(enrichedMessage);
         }
 
+        // ========================================================================
+        // 2.5 PROACTIVE ENGAGEMENT FEEDBACK LOOP
+        // ========================================================================
+        // If PA responded to a proactive checkup (parent was contacted about absence),
+        // relay the parent's response back to SA
+        if (message.context === 'PA' && (output as any).reply_text) {
+            try {
+                // Check if there's a recent proactive engagement for this parent
+                const parentPhone = message.from;
+                const recentProactive = await new Promise<any>((resolve) => {
+                    db.getDB().get(
+                        `SELECT id, school_id FROM messages 
+                         WHERE from_phone = ? AND context = 'PA' 
+                         AND body LIKE '%PROACTIVE CHECKUP%'
+                         ORDER BY timestamp DESC LIMIT 1`,
+                        [parentPhone],
+                        (err, row) => resolve(row)
+                    );
+                });
+
+                if (recentProactive) {
+                    logger.info({ parentPhone }, '🔄 [DISPATCHER] Parent responded to proactive checkup - relaying to SA');
+                    
+                    // Import and call relay
+                    const { AgentBridgeService } = await import('../services/proactive-engagement');
+                    await AgentBridgeService.relayAgentReport(
+                        schoolId,
+                        'PA',
+                        `Parent ${parentPhone} responded to proactive absence checkup: ${message.body}`,
+                        enrichedMessage
+                    );
+                }
+            } catch (err) {
+                logger.error({ err }, '❌ [DISPATCHER] Failed to relay proactive engagement feedback');
+            }
+        }
+
         // 3. Record Outgoing Response
         await HistoryManager.recordMessage(schoolId, userId, message.from, message.context, {
             type: 'text',
