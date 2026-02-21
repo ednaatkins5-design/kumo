@@ -179,6 +179,20 @@ export class ParentAgent extends BaseAgent {
         schoolId: string
     ): Promise<{ authorized: boolean; reason?: string }> {
         if (action === 'VERIFY_PARENT_TOKEN' || action === 'VERIFY_TEACHER_TOKEN') return { authorized: true };
+        
+        // For UNIFY_PARENT, allow if parent exists in registry (even if not fully authenticated)
+        // This enables newly added parents to link their children
+        if (action === 'UNIFY_PARENT') {
+            const parentRecord = await new Promise<any>((resolve) => {
+                db.getDB().get(
+                    `SELECT parent_id FROM parent_registry WHERE parent_phone = ? AND school_id = ? AND is_active = 1`,
+                    [parentPhone, schoolId],
+                    (err, row) => resolve(row)
+                );
+            });
+            if (parentRecord) return { authorized: true };
+        }
+        
         const userRole = await this.getParentUserRole(parentPhone, schoolId);
         if (!userRole) return { authorized: false, reason: 'User role not found' };
         return ActionAuthorizer.authorize(action, userRole as any);

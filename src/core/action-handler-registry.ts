@@ -611,8 +611,8 @@ class UnifyParentHandler implements ActionHandler {
                 
                 await new Promise<void>((resolve, reject) => {
                     db.getDB().run(
-                        `INSERT INTO parent_registry (parent_id, school_id, parent_phone, parent_name, parent_access_token, is_active, created_at)
-                         VALUES (?, ?, ?, 'Parent', ?, 1, datetime('now'))`,
+                        `INSERT INTO parent_registry (parent_id, school_id, parent_phone, parent_name, parent_access_token, token_expires_at, is_active, created_at)
+                         VALUES (?, ?, ?, 'Parent', ?, datetime('now', '+30 days'), 1, datetime('now'))`,
                         [parentId, schoolId, parentPhone, token],
                         (err) => err ? reject(err) : resolve()
                     );
@@ -750,7 +750,8 @@ export class ActionHandlerRegistry {
         
         // Special case: VERIFY_PARENT_TOKEN and VERIFY_TEACHER_TOKEN don't require prior authorization
         // They are authentication actions that verify the user's identity
-        if (actionName !== 'VERIFY_PARENT_TOKEN' && actionName !== 'VERIFY_TEACHER_TOKEN') {
+        // Special case: UNIFY_PARENT can be performed by newly added parents
+        if (actionName !== 'VERIFY_PARENT_TOKEN' && actionName !== 'VERIFY_TEACHER_TOKEN' && actionName !== 'UNIFY_PARENT') {
             const userRole = (message.identity?.role || message.fromRole) as UserRole | null;
             const intentClear = output.intent_clear === true;
             const authorityAcknowledged = output.authority_acknowledged === true;
@@ -771,6 +772,27 @@ export class ActionHandlerRegistry {
                 }, 'Action authorization failed');
                 
                 output.reply_text = `I'm sorry, you're not authorized to perform this action. ${authResult.reason || ''}`;
+                output.action_required = 'NONE';
+                return output;
+            }
+        }
+        
+        // For UNIFY_PARENT, do a custom check - allow if parent exists in registry
+        if (actionName === 'UNIFY_PARENT') {
+            const { db } = await import('../db');
+            const parentPhone = message.from;
+            
+            const parentRecord = await new Promise<any>((resolve) => {
+                db.getDB().get(
+                    `SELECT parent_id FROM parent_registry WHERE parent_phone = ? AND school_id = ? AND is_active = 1`,
+                    [parentPhone, schoolId],
+                    (err, row) => resolve(row)
+                );
+            });
+            
+            if (!parentRecord) {
+                logger.warn({ action: actionName, parentPhone }, 'UNIFY_PARENT: Parent not in registry');
+                output.reply_text = "I couldn't verify your parent account. Please contact the school to be added.";
                 output.action_required = 'NONE';
                 return output;
             }

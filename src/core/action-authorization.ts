@@ -13,7 +13,7 @@
  * - 'group_admin': Group moderator (GA agent)
  */
 
-export type UserRole = 'admin' | 'teacher' | 'primary_teacher' | 'parent' | 'student' | 'group_admin';
+export type UserRole = 'admin' | 'teacher' | 'primary_teacher' | 'parent' | 'student' | 'group_admin' | 'unidentified';
 
 export interface ActionSpec {
     action: string;
@@ -69,7 +69,7 @@ export const ACTION_REGISTRY: Record<string, ActionSpec> = {
     'UNIFY_PARENT': {
         action: 'UNIFY_PARENT',
         agent: 'PA',
-        required_role: 'parent',
+        required_role: ['parent', 'unidentified'],
         description: 'Link a parent phone to existing student(s)',
         conversational: true,
         requires_intent_clear: true,

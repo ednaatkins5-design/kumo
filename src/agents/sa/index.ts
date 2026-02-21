@@ -2185,8 +2185,8 @@ Your child, *${student_name}*, has been successfully registered. As a parent, yo
                     const parentId = `parent-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
                     await new Promise<void>((resolve, reject) => {
                         db.getDB().run(
-                            `INSERT INTO parent_registry (parent_id, school_id, parent_phone, parent_name, parent_access_token, is_active, created_at)
-                             VALUES (?, ?, ?, ?, ?, 1, datetime('now'))`,
+                            `INSERT INTO parent_registry (parent_id, school_id, parent_phone, parent_name, parent_access_token, token_expires_at, is_active, created_at)
+                             VALUES (?, ?, ?, ?, ?, datetime('now', '+30 days'), 1, datetime('now'))`,
                             [parentId, schoolId, normalizedPhone, parent_name, token],
                             (err) => err ? reject(err) : resolve()
                         );
