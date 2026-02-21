@@ -9,7 +9,8 @@ export type PAActionType =
     | 'DELIVER_STUDENT_PDF'
     | 'REPORT_WORK_TO_ADMIN'
     | 'UPDATE_USER_NAME'
-    | 'REQUEST_VOICE_CALL';
+    | 'REQUEST_VOICE_CALL'
+    | 'UNIFY_PARENT';
 
 export interface PAOutput {
     agent: 'PA';
@@ -61,13 +62,11 @@ export interface PAOutput {
         reason?: string;
         name?: string;
 
-        // For REQUEST_VOICE_CALL
-        voice_call_payload?: {
-            reason: string;
-            context_summary: string;
-            recipient_name?: string;
-            initial_message_override?: string;
-        };
+        // For UNIFY_PARENT (link parent to student - from PA conversation)
+        unify_children?: Array<{
+            student_name: string;
+            class_level: string;
+        }>;
     };
     confidence_score: number;
     session_active: boolean;

@@ -1,6 +1,7 @@
 export type SAActionType = 
     | 'NONE'
     | 'MANAGE_STAFF'
+    | 'MANAGE_PARENTS'
     | 'LOCK_RESULTS'
     | 'UNLOCK_RESULTS'
     | 'RELEASE_RESULTS'
@@ -18,6 +19,7 @@ export type SAActionType =
     | 'DENY_MARK_AMENDMENT'
     | 'REQUEST_MARK_CORRECTION'
     | 'ENGAGE_PARENTS'
+    | 'UNIFY_PARENT'
     | 'TRIGGER_PROACTIVE_ENGAGEMENT';
 
 export interface SAOutput {
@@ -53,6 +55,15 @@ export interface SAOutput {
         class_level?: string;
         registration_data_confirmed?: boolean;
         announcement_content?: string;
+        
+        // For MANAGE_PARENTS (ADD/UPDATE/REMOVE parent)
+        operation?: 'ADD' | 'UPDATE' | 'REMOVE';
+        
+        // For UNIFY_PARENT (link parent to existing student)
+        children?: Array<{
+            student_name: string;
+            class_level: string;
+        }>;
         
         // For LOCK/UNLOCK/SIGN/RELEASE
         name?: string;

@@ -57,6 +57,24 @@ export const ACTION_REGISTRY: Record<string, ActionSpec> = {
         requires_intent_clear: true,
         requires_authority: true
     },
+    'MANAGE_PARENTS': {
+        action: 'MANAGE_PARENTS',
+        agent: 'SA',
+        required_role: 'admin',
+        description: 'Add, update, or remove parent records',
+        conversational: true,
+        requires_intent_clear: true,
+        requires_authority: true
+    },
+    'UNIFY_PARENT': {
+        action: 'UNIFY_PARENT',
+        agent: 'PA',
+        required_role: 'parent',
+        description: 'Link a parent phone to existing student(s)',
+        conversational: true,
+        requires_intent_clear: true,
+        requires_authority: false
+    },
     'ENGAGE_PARENT_ON_ABSENCE': {
         action: 'ENGAGE_PARENT_ON_ABSENCE',
         agent: 'SA',

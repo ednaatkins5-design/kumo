@@ -577,6 +577,131 @@ class VerifyParentTokenHandler implements ActionHandler {
 }
 
 /**
+ * UNIFY_PARENT Handler - Link parent phone to existing student(s)
+ * Used by both PA (when parent declares child) and SA
+ */
+class UnifyParentHandler implements ActionHandler {
+    async execute(ctx: ActionHandlerContext): Promise<any> {
+        const { output, message, schoolId } = ctx;
+        const children = output.action_payload?.unify_children || output.action_payload?.children || [];
+        
+        // Get parent phone - prefer from message (actual sender)
+        const parentPhone = message.from;
+        
+        if (!children || !Array.isArray(children) || children.length === 0) {
+            output.reply_text = "I need to know your child's name and class to link them. Please tell me, for example: 'My child is Musa in Primary 3'.";
+            output.action_required = 'NONE';
+            return output;
+        }
+
+        try {
+            // Find or create parent record
+            let parentRecord: any = await new Promise((resolve) => {
+                db.getDB().get(
+                    `SELECT parent_id, parent_name FROM parent_registry WHERE parent_phone = ? AND school_id = ? AND is_active = 1`,
+                    [parentPhone, schoolId],
+                    (err, row) => resolve(row)
+                );
+            });
+
+            if (!parentRecord) {
+                // Create parent record if doesn't exist
+                const token = crypto.randomBytes(4).toString('hex').toUpperCase();
+                const parentId = `parent-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                
+                await new Promise<void>((resolve, reject) => {
+                    db.getDB().run(
+                        `INSERT INTO parent_registry (parent_id, school_id, parent_phone, parent_name, parent_access_token, is_active, created_at)
+                         VALUES (?, ?, ?, 'Parent', ?, 1, datetime('now'))`,
+                        [parentId, schoolId, parentPhone, token],
+                        (err) => err ? reject(err) : resolve()
+                    );
+                });
+
+                parentRecord = { parent_id: parentId, parent_name: 'Parent' };
+            }
+
+            const linkedChildren = [];
+            const failedChildren = [];
+
+            for (const child of children) {
+                const student_name = child.student_name || child.name;
+                const class_level = child.class_level || child.class;
+
+                if (!student_name || !class_level) {
+                    failedChildren.push({ student_name, reason: "Missing name or class" });
+                    continue;
+                }
+
+                // Find student by name and class
+                const student: any = await new Promise((resolve) => {
+                    db.getDB().get(
+                        `SELECT student_id, name FROM students WHERE LOWER(name) LIKE LOWER(?) AND LOWER(class_level) = LOWER(?) AND school_id = ?`,
+                        [`%${student_name}%`, class_level, schoolId],
+                        (err, row) => resolve(row)
+                    );
+                });
+
+                if (!student) {
+                    failedChildren.push({ student_name, reason: "Student not found in this class" });
+                    continue;
+                }
+
+                // Check if already linked
+                const existingLink: any = await new Promise((resolve) => {
+                    db.getDB().get(
+                        `SELECT * FROM parent_children_mapping WHERE parent_id = ? AND student_id = ?`,
+                        [parentRecord.parent_id, student.student_id],
+                        (err, row) => resolve(row)
+                    );
+                });
+
+                if (existingLink) {
+                    linkedChildren.push({ student_name: student.name, status: 'already_linked' });
+                    continue;
+                }
+
+                // Create mapping
+                await new Promise<void>((resolve, reject) => {
+                    db.getDB().run(
+                        `INSERT INTO parent_children_mapping (parent_id, student_id, school_id, linked_at)
+                         VALUES (?, ?, ?, datetime('now'))`,
+                        [parentRecord.parent_id, student.student_id, schoolId],
+                        (err) => err ? reject(err) : resolve()
+                    );
+                });
+
+                linkedChildren.push({ student_name: student.name, status: 'linked' });
+            }
+
+            // Build response
+            if (linkedChildren.length > 0) {
+                const childNames = linkedChildren.map(c => c.student_name).join(', ');
+                output.reply_text = `✅ *Link Complete!*\n\nYour child(ren) have been linked: ${childNames}\n\nYou can now check their results, attendance, and fees.`;
+            } else if (failedChildren.length > 0) {
+                const reasons = failedChildren.map(c => `${c.student_name}: ${c.reason}`).join(', ');
+                output.reply_text = `I couldn't find some children: ${reasons}. Please check the names and classes.`;
+            }
+            
+            output.action_payload = {
+                success: true,
+                linked_children: linkedChildren,
+                failed_children: failedChildren
+            };
+            output.action_required = 'NONE';
+
+            return output;
+
+        } catch (error) {
+            logger.error({ error }, 'UNIFY_PARENT failed');
+            output.reply_text = "Sorry, I encountered an error while linking your child. Please try again.";
+            output.action_required = 'NONE';
+            return output;
+        }
+    }
+}
+
+/**
  * MAIN REGISTRY: Maps action names to handler instances
  */
 export const ACTION_HANDLERS: Record<string, ActionHandler> = {
@@ -595,6 +720,7 @@ export const ACTION_HANDLERS: Record<string, ActionHandler> = {
     'DELIVER_STUDENT_PDF': new DeliverStudentPDFHandler(),
     'ESCALATE_PAYMENT': new EscalatePaymentHandler(),
     'VERIFY_PARENT_TOKEN': new VerifyParentTokenHandler(),
+    'UNIFY_PARENT': new UnifyParentHandler(),
     
     // Add more handlers as needed
     // Phase 4 continues to migrate other handlers...

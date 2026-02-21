@@ -20,6 +20,7 @@ import { RobustJsonParser } from '../../core/robust-json-parser';
 import { DataValidator } from '../../utils/data-validator';
 import { PhoneNormalizer } from '../../utils/phone-normalizer';
 import { v4 as uuidv4 } from 'uuid';
+import crypto from 'crypto';
 import { db } from '../../db';
 import { messenger } from '../../services/messenger';
 import { visionService } from '../../ai/vision';
@@ -486,36 +487,9 @@ export class SchoolAdminAgent extends BaseAgent {
                 output.authority_acknowledged = true;
             }
 
-            // ✅ NEW: Aggressive inference for ATTENDANCE_ABSENCE - Engage Parents
-            // Fallback: If LLM doesn't output ENGAGE_PARENTS, check for explicit approval keywords
-            const bodyLower = message.body.toLowerCase();
-            const isAbsenceEscalation = pendingEscalation?.escalation_type === 'ATTENDANCE_ABSENCE';
-            const wantsEngageParents = bodyLower.includes('yes') || 
-                                        bodyLower.includes('engage') || 
-                                        bodyLower.includes('contact parents') ||
-                                        bodyLower.includes('do it') ||
-                                        bodyLower.includes('go ahead') ||
-                                        bodyLower.includes('please do');
-            
-            if (isAbsenceEscalation && wantsEngageParents && output.action_required === 'NONE') {
-                // Extract absentees from escalation context
-                const escContext = typeof pendingEscalation.context === 'string' 
-                    ? JSON.parse(pendingEscalation.context || '{}') 
-                    : (pendingEscalation.context || {});
-                
-                const absentees = escContext.absentees || [];
-                
-                if (absentees.length > 0) {
-                    logger.info({ escalationId: pendingEscalation.id, absentees }, '🧬 [GOD_MODE] Aggressively inferring ENGAGE_PARENTS from context (LLM fallback)');
-                    output.action_required = 'ENGAGE_PARENTS';
-                    output.intent_clear = true;
-                    output.authority_acknowledged = true;
-                    output.action_payload = {
-                        absentees: absentees.map((s: any) => ({ name: s.student_name || s.name })),
-                        reason: 'Student absence - contacting parent'
-                    };
-                }
-            }
+            // ✅ NOTE: ENGAGE_PARENTS should ONLY be triggered when LLM explicitly returns the action
+            // DO NOT add aggressive fallback - let the LLM decide based on proper context
+            // If LLM doesn't return ENGAGE_PARENTS, the system will prompt for clarification
 
             // For ATTENDANCE_ABSENCE - let LLM decide based on escalation context
 
@@ -877,6 +851,38 @@ export class SchoolAdminAgent extends BaseAgent {
                     } else {
                         const errorResult = { success: false, error: regResult.error };
                         output.reply_text = await this.synthesizeActionResult('REGISTER_STUDENT_FAILED', errorResult, "Registration failed.", contextPrompt, systemPrompt, SA_TA_CONFIG);
+                        output.action_required = 'NONE';
+                        return output;
+                    }
+                }
+
+                // Handle MANAGE_PARENTS (ADD/UPDATE/REMOVE parent)
+                if (currentAction === 'MANAGE_PARENTS') {
+                    logger.info({ payload }, '🛠️ Processing MANAGE_PARENTS action');
+                    const manageResult = await this.executeManageParents(schoolId, payload, output);
+                    if (manageResult.success) {
+                        if (!systemActionResult) systemActionResult = { results: [] };
+                        if (!Array.isArray(systemActionResult.results)) systemActionResult.results = [];
+                        systemActionResult.results.push({ type: 'MANAGE_PARENTS', ...manageResult });
+                    } else {
+                        const errorResult = { success: false, error: manageResult.error };
+                        output.reply_text = await this.synthesizeActionResult('MANAGE_PARENTS_FAILED', errorResult, "Parent management failed.", contextPrompt, systemPrompt, SA_TA_CONFIG);
+                        output.action_required = 'NONE';
+                        return output;
+                    }
+                }
+
+                // Handle UNIFY_PARENT (link parent to existing student)
+                if (currentAction === 'UNIFY_PARENT') {
+                    logger.info({ payload }, '🛠️ Processing UNIFY_PARENT action');
+                    const unifyResult = await this.executeUnifyParent(schoolId, payload, output);
+                    if (unifyResult.success) {
+                        if (!systemActionResult) systemActionResult = { results: [] };
+                        if (!Array.isArray(systemActionResult.results)) systemActionResult.results = [];
+                        systemActionResult.results.push({ type: 'UNIFY_PARENT', ...unifyResult });
+                    } else {
+                        const errorResult = { success: false, error: unifyResult.error };
+                        output.reply_text = await this.synthesizeActionResult('UNIFY_PARENT_FAILED', errorResult, "Parent linking failed.", contextPrompt, systemPrompt, SA_TA_CONFIG);
                         output.action_required = 'NONE';
                         return output;
                     }
@@ -2121,6 +2127,247 @@ Your child, *${student_name}*, has been successfully registered. As a parent, yo
 
         } catch (error) {
             logger.error({ error }, 'Student registration failed');
+            return { success: false, error: "Database error" };
+        }
+    }
+
+    /**
+     * MANAGE_PARENTS: Add, Update, or Remove parent records
+     */
+    private async executeManageParents(schoolId: string, payload: any, output: SAOutput): Promise<any> {
+        const operation = payload.operation;
+        const parent_name = payload.parent_name;
+        const parent_phone = payload.parent_phone;
+
+        if (!operation || !['ADD', 'UPDATE', 'REMOVE'].includes(operation)) {
+            return { success: false, error: "Invalid operation. Must be ADD, UPDATE, or REMOVE." };
+        }
+
+        if (!parent_phone) {
+            return { success: false, error: "Parent phone number is required." };
+        }
+
+        const normalizedPhone = PhoneNormalizer.normalize(parent_phone);
+
+        try {
+            if (operation === 'ADD') {
+                if (!parent_name) {
+                    return { success: false, error: "Parent name is required for ADD operation." };
+                }
+
+                // Check if parent already exists
+                const existingParent: any = await new Promise((resolve) => {
+                    db.getDB().get(
+                        `SELECT parent_id, is_active FROM parent_registry WHERE parent_phone = ? AND school_id = ?`,
+                        [normalizedPhone, schoolId],
+                        (err, row) => resolve(row)
+                    );
+                });
+
+                if (existingParent && existingParent.is_active) {
+                    return { success: false, error: `Parent with phone ${parent_phone} already exists and is active.` };
+                }
+
+                // Generate token for parent
+                const token = crypto.randomBytes(4).toString('hex').toUpperCase();
+
+                if (existingParent) {
+                    // Reactivate existing parent
+                    await new Promise<void>((resolve, reject) => {
+                        db.getDB().run(
+                            `UPDATE parent_registry SET parent_name = ?, is_active = 1 WHERE parent_id = ?`,
+                            [parent_name, existingParent.parent_id],
+                            (err) => err ? reject(err) : resolve()
+                        );
+                    });
+                } else {
+                    // Insert new parent
+                    const parentId = `parent-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                    await new Promise<void>((resolve, reject) => {
+                        db.getDB().run(
+                            `INSERT INTO parent_registry (parent_id, school_id, parent_phone, parent_name, parent_access_token, is_active, created_at)
+                             VALUES (?, ?, ?, ?, ?, 1, datetime('now'))`,
+                            [parentId, schoolId, normalizedPhone, parent_name, token],
+                            (err) => err ? reject(err) : resolve()
+                        );
+                    });
+                }
+
+                // Send welcome message to newly added parent
+                const school: any = await new Promise((resolve) => {
+                    db.getDB().get(`SELECT name FROM schools WHERE id = ?`, [schoolId], (err, row) => resolve(row));
+                });
+
+                const welcomeMsg = `Welcome to *${school?.name || 'Kumo Academy'}*! 🌟
+
+You have been added as a parent. 
+
+To link your child(ren), please reply with their name(s) and class(es). For example: "My child is Musa in Primary 3"
+
+Once linked, you can check results, attendance, and fees.`;
+
+                await messenger.sendPush(schoolId, normalizedPhone, welcomeMsg);
+
+                return { success: true, operation: 'ADD', parent_name, parent_phone: normalizedPhone, token };
+            }
+
+            if (operation === 'UPDATE') {
+                if (!parent_name) {
+                    return { success: false, error: "New parent name is required for UPDATE operation." };
+                }
+
+                const updated = await new Promise<boolean>((resolve, reject) => {
+                    db.getDB().run(
+                        `UPDATE parent_registry SET parent_name = ? WHERE parent_phone = ? AND school_id = ?`,
+                        [parent_name, normalizedPhone, schoolId],
+                        (err) => err ? reject(err) : resolve(true)
+                    );
+                });
+
+                if (!updated) {
+                    return { success: false, error: "Parent not found." };
+                }
+
+                return { success: true, operation: 'UPDATE', parent_name, parent_phone: normalizedPhone };
+            }
+
+            if (operation === 'REMOVE') {
+                const deactivated = await new Promise<boolean>((resolve, reject) => {
+                    db.getDB().run(
+                        `UPDATE parent_registry SET is_active = 0 WHERE parent_phone = ? AND school_id = ?`,
+                        [normalizedPhone, schoolId],
+                        (err) => err ? reject(err) : resolve(true)
+                    );
+                });
+
+                if (!deactivated) {
+                    return { success: false, error: "Parent not found." };
+                }
+
+                return { success: true, operation: 'REMOVE', parent_phone: normalizedPhone };
+            }
+
+            return { success: false, error: "Invalid operation." };
+
+        } catch (error) {
+            logger.error({ error, operation }, 'MANAGE_PARENTS failed');
+            return { success: false, error: "Database error" };
+        }
+    }
+
+    /**
+     * UNIFY_PARENT: Link a parent phone to existing student(s)
+     */
+    private async executeUnifyParent(schoolId: string, payload: any, output: SAOutput): Promise<any> {
+        const { children, parent_phone } = payload;
+
+        if (!children || !Array.isArray(children) || children.length === 0) {
+            return { success: false, error: "At least one child (student_name and class_level) is required." };
+        }
+
+        // Get parent phone - from payload or need to derive from context
+        const parentPhone = parent_phone || output.action_payload?.parent_phone;
+        if (!parentPhone) {
+            return { success: false, error: "Parent phone is required." };
+        }
+
+        const normalizedPhone = PhoneNormalizer.normalize(parentPhone);
+
+        try {
+            // Find or create parent record
+            let parentRecord: any = await new Promise((resolve) => {
+                db.getDB().get(
+                    `SELECT parent_id, parent_name FROM parent_registry WHERE parent_phone = ? AND school_id = ? AND is_active = 1`,
+                    [normalizedPhone, schoolId],
+                    (err, row) => resolve(row)
+                );
+            });
+
+            if (!parentRecord) {
+                // Create parent record if doesn't exist
+                const token = crypto.randomBytes(4).toString('hex').toUpperCase();
+                const parentId = `parent-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                
+                await new Promise<void>((resolve, reject) => {
+                    db.getDB().run(
+                        `INSERT INTO parent_registry (parent_id, school_id, parent_phone, parent_name, parent_access_token, is_active, created_at)
+                         VALUES (?, ?, ?, 'Parent', ?, 1, datetime('now'))`,
+                        [parentId, schoolId, normalizedPhone, token],
+                        (err) => err ? reject(err) : resolve()
+                    );
+                });
+
+                parentRecord = { parent_id: parentId, parent_name: 'Parent' };
+            }
+
+            const linkedChildren = [];
+            const failedChildren = [];
+
+            for (const child of children) {
+                const { student_name, class_level } = child;
+
+                if (!student_name || !class_level) {
+                    failedChildren.push({ student_name, reason: "Missing student_name or class_level" });
+                    continue;
+                }
+
+                // Find student by name and class
+                const student: any = await new Promise((resolve) => {
+                    db.getDB().get(
+                        `SELECT student_id, name FROM students WHERE LOWER(name) = LOWER(?) AND LOWER(class_level) = LOWER(?) AND school_id = ?`,
+                        [student_name, class_level, schoolId],
+                        (err, row) => resolve(row)
+                    );
+                });
+
+                if (!student) {
+                    failedChildren.push({ student_name, reason: "Student not found in this class" });
+                    continue;
+                }
+
+                // Check if already linked
+                const existingLink: any = await new Promise((resolve) => {
+                    db.getDB().get(
+                        `SELECT * FROM parent_children_mapping WHERE parent_id = ? AND student_id = ?`,
+                        [parentRecord.parent_id, student.student_id],
+                        (err, row) => resolve(row)
+                    );
+                });
+
+                if (existingLink) {
+                    linkedChildren.push({ student_name, status: 'already_linked' });
+                    continue;
+                }
+
+                // Create mapping
+                await new Promise<void>((resolve, reject) => {
+                    db.getDB().run(
+                        `INSERT INTO parent_children_mapping (parent_id, student_id, school_id, linked_at)
+                         VALUES (?, ?, ?, datetime('now'))`,
+                        [parentRecord.parent_id, student.student_id, schoolId],
+                        (err) => err ? reject(err) : resolve()
+                    );
+                });
+
+                linkedChildren.push({ student_name, status: 'linked' });
+            }
+
+            // Send confirmation message to parent
+            if (linkedChildren.length > 0) {
+                const childNames = linkedChildren.map(c => c.student_name).join(', ');
+                const confirmationMsg = `✅ *Link Complete!*\n\nYour child(ren) have been linked: ${childNames}\n\nYou can now check their results, attendance, and fees.`;
+                await messenger.sendPush(schoolId, normalizedPhone, confirmationMsg);
+            }
+
+            return { 
+                success: true, 
+                parent_phone: normalizedPhone, 
+                linked_children: linkedChildren,
+                failed_children: failedChildren
+            };
+
+        } catch (error) {
+            logger.error({ error }, 'UNIFY_PARENT failed');
             return { success: false, error: "Database error" };
         }
     }
