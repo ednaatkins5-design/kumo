@@ -1827,6 +1827,7 @@ export class SchoolAdminAgent extends BaseAgent {
                         );
                         results.push({ 
                             name: studentName, 
+                            parentName: res.summary?.replace('Checkup sent to ', '') || studentName,
                             success: res.success, 
                             summary: res.summary,
                             feedback: res.agentFeedback // Capture specific reason for failure
@@ -1837,12 +1838,12 @@ export class SchoolAdminAgent extends BaseAgent {
                     
                     // ✅ FIX: Replace hallucinated reply with actual results before synthesis
                     // The LLM's original reply_text may contain hallucinated student names
-                    // Use the actual results instead
-                    const successfullyEngaged = results.filter(r => r.success).map(r => r.name);
+                    // Use the actual results instead - show parent names
+                    const successfullyEngaged = results.filter(r => r.success).map(r => r.parentName || r.name);
                     const failedStudents = results.filter(r => !r.success).map(r => ({ name: r.name, reason: r.feedback }));
                     
                     if (successfullyEngaged.length > 0) {
-                        output.reply_text = `Parent engagement completed. Successfully contacted: ${successfullyEngaged.join(', ')}.`;
+                        output.reply_text = `Parent engagement completed. Successfully contacted parents of: ${successfullyEngaged.join(', ')}.`;
                     } else if (failedStudents.length > 0) {
                         output.reply_text = `Parent engagement attempted but failed for: ${failedStudents.map(f => f.name).join(', ')}. Reasons: ${failedStudents.map(f => f.reason).join('; ')}`;
                     }
