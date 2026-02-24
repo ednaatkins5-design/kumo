@@ -22,9 +22,8 @@ export class DatabaseManager {
 
         await DatabaseManager.loadSchemas(adapter);
         
-        if (ENV.DB_TYPE === 'sqlite') {
-            await DatabaseManager.runAuthMigration(adapter);
-        }
+        // Run auth migration for both SQLite and PostgreSQL
+        await DatabaseManager.runAuthMigration(adapter);
     }
 
     private static async loadSchemas(adapter: DatabaseAdapter): Promise<void> {
@@ -88,6 +87,10 @@ export class DatabaseManager {
     }
 
     private static async runAuthMigration(adapter: DatabaseAdapter): Promise<void> {
+        const isPostgres = ENV.DB_TYPE === 'postgres';
+        const serialType = isPostgres ? 'SERIAL' : 'INTEGER PRIMARY KEY AUTOINCREMENT';
+        const nowFunc = isPostgres ? 'CURRENT_TIMESTAMP' : "(strftime('%s', 'now'))";
+        
         const addColumnSafe = async (table: string, column: string, definition: string, desc: string) => {
             try {
                 await adapter.run(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
@@ -101,6 +104,7 @@ export class DatabaseManager {
             }
         };
         
+        // Add missing columns to existing tables
         await addColumnSafe('users', 'password_hash', 'TEXT', 'password_hash');
         await addColumnSafe('users', 'email', 'TEXT', 'email');
         await addColumnSafe('users', 'is_active', 'INTEGER DEFAULT 1', 'is_active');
@@ -108,13 +112,20 @@ export class DatabaseManager {
         await addColumnSafe('schools', 'admin_name', 'TEXT', 'admin_name');
         await addColumnSafe('ta_setup_state', 'progress_percentage', 'INTEGER DEFAULT 0', 'progress_percentage');
         
+        // Add WhatsApp columns to schools
+        await addColumnSafe('schools', 'whatsapp_connection_status', 'TEXT DEFAULT \'disconnected\'', 'whatsapp_connection_status');
+        await addColumnSafe('schools', 'connected_whatsapp_jid', 'TEXT', 'connected_whatsapp_jid');
+        await addColumnSafe('schools', 'qr_refresh_count', 'INTEGER DEFAULT 0', 'qr_refresh_count');
+        await addColumnSafe('schools', 'qr_refresh_locked_until', 'TIMESTAMP', 'qr_refresh_locked_until');
+        await addColumnSafe('schools', 'last_connection_at', 'TIMESTAMP', 'last_connection_at');
+        
         try {
             await adapter.run(`CREATE TABLE IF NOT EXISTS password_reset_tokens (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id ${serialType},
                 user_id TEXT NOT NULL,
                 token TEXT NOT NULL,
                 expires_at INTEGER NOT NULL,
-                created_at INTEGER DEFAULT (strftime('%s', 'now'))
+                created_at INTEGER DEFAULT ${nowFunc}
             )`);
         } catch (err) {
             logger.warn({ err }, 'password_reset_tokens table creation');
@@ -122,11 +133,11 @@ export class DatabaseManager {
 
         try {
             await adapter.run(`CREATE TABLE IF NOT EXISTS user_sessions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id ${serialType},
                 user_id TEXT NOT NULL,
                 school_id TEXT NOT NULL,
                 token_jti TEXT NOT NULL UNIQUE,
-                created_at INTEGER DEFAULT (strftime('%s', 'now')),
+                created_at INTEGER DEFAULT ${nowFunc},
                 expires_at INTEGER NOT NULL,
                 is_revoked INTEGER DEFAULT 0
             )`);
