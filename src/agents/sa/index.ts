@@ -3195,7 +3195,7 @@ We'll complete your profile setup shortly. Your Access Token is: *${token}*`;
 
             return parsed;
 
-        } catch (error) {
+        } catch (error: any) {
             logger.error({
                 error: error instanceof Error ? {
                     message: error.message,
@@ -3206,8 +3206,10 @@ We'll complete your profile setup shortly. Your Access Token is: *${token}*`;
                 currentStep: state?.current_step
             }, '❌ SA Setup Logic Failed');
             
+            // Return more helpful error message for debugging
+            const errorMsg = error?.message || error?.toString() || 'Unknown error';
             return {
-                reply_text: "Oga, I had a small glitch processing that. Can you please try again or show me the paper clearly?",
+                reply_text: `Error: ${errorMsg.substring(0, 100)}`,
                 action: 'NO_ACTION',
                 internal_payload: {},
                 setup_status: {
