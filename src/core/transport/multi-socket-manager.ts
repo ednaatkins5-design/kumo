@@ -26,6 +26,7 @@ import { writeFile } from 'fs/promises';
 import { v4 as uuidv4 } from 'uuid';
 import pino from 'pino';
 import { messenger, OutboundMessage } from '../../services/messenger';
+import { whatsappSessionService } from '../../services/whatsapp-session';
 import EventEmitter from 'events';
 
 export interface QRCodeData {
@@ -246,6 +247,66 @@ export class WhatsAppTransportManager extends EventEmitter {
     }
 
     /**
+     * Get auth state from database for persistence across restarts
+     */
+    private async getDbAuthState(schoolId: string): Promise<{ state: any; saveCreds: () => Promise<void> }> {
+        // Try to load session from database
+        const sessionData = await whatsappSessionService.loadSession(schoolId);
+        
+        let creds = null;
+        let keys = {};
+        
+        if (sessionData && sessionData.creds) {
+            creds = sessionData.creds;
+            keys = sessionData.keys || {};
+            console.log(`[WhatsApp] 📂 Loaded session from database for school ${schoolId}`);
+        } else {
+            console.log(`[WhatsApp] 📂 No existing session in database for school ${schoolId}, starting fresh`);
+        }
+        
+        // Create a simple in-memory key store that saves to database
+        const keyStore = {
+            get: async (type: string, ids: string[]) => {
+                const keyMap: any = {};
+                for (const id of ids) {
+                    if (keys[type] && keys[type][id]) {
+                        keyMap[id] = keys[type][id];
+                    }
+                }
+                return keyMap;
+            },
+            set: async (type: string, map: any) => {
+                keys[type] = { ...(keys[type] || {}), ...map };
+                await this.saveAuthState(schoolId, creds, keys);
+            },
+            clear: async () => {
+                keys = {};
+            }
+        };
+        
+        return {
+            state: {
+                creds: creds || {},
+                keys: keyStore
+            },
+            saveCreds: async () => {
+                await this.saveAuthState(schoolId, creds, keys);
+            }
+        };
+    }
+
+    /**
+     * Save auth state to database
+     */
+    private async saveAuthState(schoolId: string, creds: any, keys: any): Promise<void> {
+        try {
+            await whatsappSessionService.saveSession(schoolId, { creds, keys, savedAt: new Date().toISOString() });
+        } catch (err) {
+            logger.error({ err, schoolId }, 'Failed to save auth state to database');
+        }
+    }
+
+    /**
      * Check if QR refresh limit reached
      */
     private async checkQRRefreshLimit(schoolId: string): Promise<{ allowed: boolean; attempts: number; lockedUntil?: Date }> {
@@ -459,10 +520,13 @@ export class WhatsAppTransportManager extends EventEmitter {
 
     /**
      * Create WhatsApp socket with the given session
-     * This is the core function that creates the socket and handles events
+     * Uses database-based session persistence for production
      */
     private async createSocket(schoolId: string, school: any, sessionDir: string, phoneNumber: string | null): Promise<void> {
-        const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
+        // Use database-based auth state for persistence across container restarts
+        const authState = await this.getDbAuthState(schoolId);
+        const { state, saveCreds } = authState;
+        
         const { version, isLatest } = await fetchLatestBaileysVersion();
         
         console.log(`[WhatsApp] 📦 Baileys version: ${version.join('.')}, isLatest: ${isLatest}`);
