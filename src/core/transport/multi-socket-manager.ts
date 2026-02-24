@@ -420,8 +420,46 @@ export class WhatsAppTransportManager extends EventEmitter {
 
     /**
      * Check if session is valid (user has completed pairing)
+     * Priority: 1) Database (persistent), 2) Filesystem (temporary)
      */
     private async isSessionValid(schoolId: string): Promise<boolean> {
+        // FIRST: Check database for persistent session
+        try {
+            const dbSession = await whatsappSessionService.loadSession(schoolId);
+            if (dbSession && dbSession.creds && dbSession.creds.registered === true) {
+                console.log(`[WhatsApp] 📂 Found valid session in database for ${schoolId}`);
+                
+                // Restore session to filesystem for Baileys
+                const sessionDir = this.getSessionDir(schoolId);
+                const credsPath = path.join(sessionDir, 'creds.json');
+                
+                // Ensure directory exists
+                if (!fs.existsSync(sessionDir)) {
+                    fs.mkdirSync(sessionDir, { recursive: true });
+                }
+                
+                // Write creds to filesystem
+                fs.writeFileSync(credsPath, JSON.stringify(dbSession.creds));
+                
+                // Also write keys if they exist
+                if (dbSession.keys) {
+                    const keysPath = path.join(sessionDir, 'keys');
+                    if (!fs.existsSync(keysPath)) {
+                        fs.mkdirSync(keysPath, { recursive: true });
+                    }
+                    for (const [keyId, keyData] of Object.entries(dbSession.keys)) {
+                        fs.writeFileSync(path.join(keysPath, `${keyId}.json`), JSON.stringify(keyData));
+                    }
+                }
+                
+                console.log(`[WhatsApp] ✅ Session restored from database to filesystem`);
+                return true;
+            }
+        } catch (err) {
+            console.log(`[WhatsApp] ⚠️ Database session check failed:`, err);
+        }
+        
+        // SECOND: Fallback to filesystem check
         const sessionDir = this.getSessionDir(schoolId);
         const credsPath = path.join(sessionDir, 'creds.json');
         
@@ -543,13 +581,40 @@ export class WhatsAppTransportManager extends EventEmitter {
             console.log(`[WhatsApp] ⚠️ DB restore skipped:`, e);
         }
         
-        // Wrap saveCreds to also backup to database
+        // Wrap saveCreds to also backup to database  
         const originalSaveCreds = saveCreds;
+        let cachedKeys: any = {};
+        
+        // Track keys changes - wrap the original methods
+        const originalKeysGet = state.keys.get.bind(state.keys);
+        const originalKeysSet = state.keys.set.bind(state.keys);
+        
+        state.keys.get = async (type: string, ids: string[]) => {
+            const keyMap: any = {};
+            for (const id of ids) {
+                if (cachedKeys[type] && cachedKeys[type][id]) {
+                    keyMap[id] = cachedKeys[type][id];
+                }
+            }
+            return keyMap;
+        };
+        state.keys.set = async (data: any) => {
+            // Merge into cachedKeys
+            for (const [type, map] of Object.entries(data)) {
+                cachedKeys[type] = { ...(cachedKeys[type] || {}), ...(map as any) };
+            }
+            return originalKeysSet(data);
+        };
+        
         const wrappedSaveCreds = async () => {
             await originalSaveCreds();
-            // Backup to database
+            // Backup to database with full state (creds + keys)
             try {
-                await whatsappSessionService.saveSession(schoolId, state.creds);
+                await whatsappSessionService.saveSession(schoolId, { 
+                    creds: state.creds, 
+                    keys: cachedKeys,
+                    savedAt: new Date().toISOString() 
+                });
             } catch (e) {
                 console.log(`[WhatsApp] ⚠️ DB backup failed:`, e);
             }
