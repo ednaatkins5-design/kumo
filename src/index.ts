@@ -221,13 +221,19 @@ async function main() {
                 const dispatcher = new AgentDispatcher();
                 const response = await dispatcher.dispatch(message);
 
-                logger.info({ response }, '📱 [TEST] SA Response');
+                logger.info({ response: JSON.stringify(response) }, '📱 [TEST] SA Response');
 
                 res.json({ success: true, response });
             } catch (error: any) {
                 logger.error({ error: error?.message, stack: error?.stack }, '❌ [TEST] SA trigger failed');
                 res.status(500).json({ success: false, error: error.message, stack: error?.stack });
             }
+        });
+
+        // Simple test endpoint that bypasses agent
+        app.post('/api/test/simple', async (req: Request, res: Response) => {
+            const { phone } = req.body;
+            res.json({ success: true, message: `Hello ${phone}! This is a test.` });
         });
 
         // TEST ENDPOINT: Trigger TA Flow (Teacher Assistant)
@@ -446,6 +452,13 @@ async function main() {
 }
 
 async function runWhatsAppMigration(): Promise<void> {
+    // Skip this migration for PostgreSQL - schema is loaded via schema_whatsapp_qr_history.sql
+    const { ENV } = await import('./config/env');
+    if (ENV.DB_TYPE === 'postgres') {
+        logger.info('Skipping WhatsApp migration for PostgreSQL');
+        return;
+    }
+    
     return new Promise((resolve, reject) => {
         const dbRef = db.getDB();
 

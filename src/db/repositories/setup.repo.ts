@@ -30,13 +30,14 @@ export class SetupRepository {
     }
 
     static async initSetup(schoolId: string, steps: string[]): Promise<void> {
+        const now = Math.floor(Date.now() / 1000);
         const sql = `
-            INSERT INTO setup_state (school_id, current_step, pending_steps, is_active)
-            VALUES (?, ?, ?, 1)
+            INSERT INTO setup_state (school_id, current_step, pending_steps, is_active, last_interaction, updated_at)
+            VALUES (?, ?, ?, 1, ?, ?)
             ON CONFLICT(school_id) DO UPDATE SET is_active = 1
         `;
         return new Promise((resolve, reject) => {
-            db.getDB().run(sql, [schoolId, steps[0], JSON.stringify(steps)], (err) => {
+            db.getDB().run(sql, [schoolId, steps[0], JSON.stringify(steps), now, now], (err) => {
                 if (err) reject(err);
                 else resolve();
             });
@@ -64,8 +65,11 @@ export class SetupRepository {
             params.push(data.is_active ? 1 : 0);
         }
 
-        updates.push(`updated_at = CURRENT_TIMESTAMP`);
-        updates.push(`last_interaction = CURRENT_TIMESTAMP`);
+        const now = Math.floor(Date.now() / 1000);
+        updates.push(`updated_at = ?`);
+        params.push(now);
+        updates.push(`last_interaction = ?`);
+        params.push(now);
 
         const sql = `UPDATE setup_state SET ${updates.join(', ')} WHERE school_id = ?`;
         params.push(schoolId);
