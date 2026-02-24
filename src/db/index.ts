@@ -56,6 +56,7 @@ export class DatabaseManager {
             { path: path.join(__dirname, 'schema_cloud_storage.sql'), name: 'Cloud Storage' },
             { path: path.join(__dirname, 'schema_whatsapp_sessions.sql'), name: 'WhatsApp Sessions' },
             { path: path.join(__dirname, 'schema_fix_whatsapp.sql'), name: 'WhatsApp Fix' },
+            { path: path.join(__dirname, 'schema_fix_timestamps.sql'), name: 'Fix Timestamps' },
             { path: path.join(__dirname, 'schema_test.sql'), name: 'Test Schema' }
         ];
 

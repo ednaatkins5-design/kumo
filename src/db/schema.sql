@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS messages (
     body TEXT,
     media_path TEXT,
     context TEXT, -- Agent context (PA, TA, SA)
-    timestamp INTEGER NOT NULL,
+    timestamp BIGINT NOT NULL,
     action_performed TEXT,
     action_status TEXT,
     is_internal INTEGER DEFAULT 0,
