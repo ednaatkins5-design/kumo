@@ -14,14 +14,19 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
 
     constructor(connectionString: string) {
         // Use Supabase Session Pooler for IPv4 compatibility (Render, Vercel, etc.)
-        // Format: postgresql://postgres.[PROJECT_REF]:[PASSWORD]@aws-1-eu-west-1.pooler.supabase.com:5432/postgres
+        // Pooler URL format: postgresql://postgres.[PROJECT_REF]:[PASSWORD]@aws-1-eu-west-1.pooler.supabase.com:5432/postgres
         let poolerUrl = connectionString;
         
-        // If using direct connection, switch to pooler
+        // Transform direct URL to pooler URL
+        // Direct: postgresql://postgres:PASSWORD@db.XXX.supabase.co:5432/postgres
+        // Pooler: postgresql://postgres.XXX:PASSWORD@aws-1-eu-west-1.pooler.supabase.com:5432/postgres
         if (connectionString.includes('.supabase.co:5432')) {
-            poolerUrl = connectionString
-                .replace('db.', 'aws-0-us-east-1.pooler.')
-                .replace('.supabase.co:5432', '.supabase.com:5432');
+            const match = connectionString.match(/postgresql:\/\/postgres:([^@]+)@db\.([^.]+)\.supabase\.co:5432\/postgres/);
+            if (match) {
+                const password = encodeURIComponent(match[1]);
+                const projectRef = match[2];
+                poolerUrl = `postgresql://postgres.${projectRef}:${password}@aws-1-eu-west-1.pooler.supabase.com:5432/postgres`;
+            }
         }
         
         this.pool = new Pool({
