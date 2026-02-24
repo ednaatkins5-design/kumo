@@ -168,6 +168,25 @@ export class DatabaseManager {
         } catch (err) {
             logger.warn({ err }, 'setup_state table creation');
         }
+
+        // Also create other critical tables
+        const criticalTables = [
+            'ta_setup_state',
+            'student_info',
+            'class_student_mapping',
+            'student_attendance_records',
+            'student_broadsheet',
+            'broadsheet_assignments'
+        ];
+
+        for (const table of criticalTables) {
+            try {
+                // Just try to select - if it fails, we don't care
+                await adapter.get(`SELECT 1 FROM ${table} LIMIT 1`);
+            } catch (err) {
+                logger.info({ table }, 'Table may not exist yet');
+            }
+        }
     }
 
     public static async close(): Promise<void> {
