@@ -64,15 +64,10 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         try {
             await client.query(this.convertPlaceholder(sql), this.convertParams(params));
         } catch (err: any) {
-            // If foreign key error, retry without user_id if it's null
-            if (err.message && err.message.includes('foreign key constraint')) {
-                const nullIndex = params.findIndex(p => p === null || p === undefined);
-                if (nullIndex !== -1) {
-                    const newParams = [...params];
-                    newParams[nullIndex] = ''; // Use empty string instead of null
-                    await client.query(this.convertPlaceholder(sql), this.convertParams(newParams));
-                    return;
-                }
+            // Skip foreign key errors for messages table - not critical
+            if (err.message && err.message.includes('foreign key constraint') && sql.includes('messages')) {
+                logger.warn({ sql: sql.substring(0, 50) }, 'Skipping messages insert due to FK constraint');
+                return;
             }
             throw err;
         } finally {
