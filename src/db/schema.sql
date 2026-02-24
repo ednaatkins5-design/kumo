@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS academic_drafts (
 CREATE TABLE IF NOT EXISTS messages (
     id TEXT PRIMARY KEY,
     school_id TEXT NOT NULL,
-    user_id TEXT, -- Present if known user
+    user_id TEXT, -- Present if known user (no FK constraint to allow null)
     from_phone TEXT NOT NULL,
     type TEXT NOT NULL,
     body TEXT,
@@ -98,8 +98,7 @@ CREATE TABLE IF NOT EXISTS messages (
     action_status TEXT,
     is_internal INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(school_id) REFERENCES schools(id),
-    FOREIGN KEY(user_id) REFERENCES users(id)
+    FOREIGN KEY(school_id) REFERENCES schools(id)
 );
 
 CREATE TABLE IF NOT EXISTS academic_terms (
