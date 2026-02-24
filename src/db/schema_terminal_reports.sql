@@ -16,8 +16,8 @@ CREATE TABLE IF NOT EXISTS terminal_reports (
     days_present INTEGER DEFAULT 0,
     days_open INTEGER DEFAULT 0,
     status TEXT DEFAULT 'DRAFT' CHECK(status IN ('DRAFT', 'RELEASED', 'PUBLISHED', 'ARCHIVED')),
-    generated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(school_id, student_id, term_id)
 );
 

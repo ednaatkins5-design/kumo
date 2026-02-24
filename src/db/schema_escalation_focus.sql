@@ -7,8 +7,8 @@ CREATE TABLE IF NOT EXISTS admin_focus_state (
     locked_escalation_id TEXT,
     school_id TEXT NOT NULL,
     last_interaction BIGINT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(locked_escalation_id) REFERENCES escalations(id),
     FOREIGN KEY(school_id) REFERENCES schools(id)
 );

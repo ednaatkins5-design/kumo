@@ -11,12 +11,12 @@ CREATE TABLE schools (
     admin_name TEXT,
     connected_whatsapp_jid TEXT,
     config_json TEXT DEFAULT '{}',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     setup_status TEXT DEFAULT 'PENDING_SETUP',
     whatsapp_connection_status TEXT DEFAULT 'disconnected',
     qr_refresh_count INTEGER DEFAULT 0,
-    qr_refresh_locked_until DATETIME,
-    last_connection_at DATETIME
+    qr_refresh_locked_until TIMESTAMP,
+    last_connection_at TIMESTAMP
 );
 INSERT INTO schools SELECT * FROM schools_backup WHERE NOT EXISTS (SELECT 1 FROM schools);
 DROP TABLE schools_backup;

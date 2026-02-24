@@ -8,11 +8,11 @@ CREATE TABLE IF NOT EXISTS mark_submissions (
     subject_id TEXT NOT NULL,
     class_level TEXT NOT NULL,
     term_id TEXT NOT NULL,
-    submission_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+    submission_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     raw_image_path TEXT, -- Path to original mark sheet image if uploaded
     status TEXT CHECK(status IN ('DRAFT', 'PENDING_TEACHER_CONFIRMATION', 'CONFIRMED', 'REJECTED')) DEFAULT 'DRAFT',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(school_id) REFERENCES schools(id),
     FOREIGN KEY(teacher_id) REFERENCES users(id),
     FOREIGN KEY(subject_id) REFERENCES subjects(id)
@@ -29,8 +29,8 @@ CREATE TABLE IF NOT EXISTS submission_marks (
     exam DECIMAL(5,2),
     total DECIMAL(5,2),
     status TEXT CHECK(status IN ('DRAFT', 'CONFIRMED', 'CORRECTED')) DEFAULT 'DRAFT',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(submission_id) REFERENCES mark_submissions(id),
     FOREIGN KEY(student_id) REFERENCES students(student_id)
 );
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS teacher_confirmation_logs (
     teacher_id TEXT NOT NULL,
     action TEXT CHECK(action IN ('VIEWED', 'CONFIRMED', 'REJECTED', 'REQUESTED_CORRECTION')) NOT NULL,
     details TEXT, -- JSON with correction details if applicable
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(submission_id) REFERENCES mark_submissions(id),
     FOREIGN KEY(teacher_id) REFERENCES users(id)
 );

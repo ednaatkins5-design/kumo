@@ -11,9 +11,9 @@ CREATE TABLE IF NOT EXISTS teacher_sessions (
     teacher_name TEXT,
     
     -- Session lifecycle
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    expires_at DATETIME NOT NULL,
-    last_activity DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP NOT NULL,
+    last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_active BOOLEAN DEFAULT 1,
     context_json TEXT, -- Unified context storage
     
@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS session_memory (
     action_status TEXT,
     
     -- Metadata
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
     FOREIGN KEY(session_id) REFERENCES teacher_sessions(session_id) ON DELETE CASCADE,
     FOREIGN KEY(school_id) REFERENCES schools(id),

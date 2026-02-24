@@ -13,11 +13,11 @@ CREATE TABLE IF NOT EXISTS file_storage (
     checksum TEXT NOT NULL, -- SHA256 for integrity verification
     storage_path TEXT NOT NULL, -- Physical path or S3 URI
     is_archived BOOLEAN DEFAULT 0,
-    archived_at DATETIME,
+    archived_at TIMESTAMP,
     archive_reason TEXT,
-    uploaded_at DATETIME NOT NULL,
-    expires_at DATETIME,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    uploaded_at TIMESTAMP NOT NULL,
+    expires_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(school_id) REFERENCES schools(id),
     FOREIGN KEY(user_id) REFERENCES users(id)
 );
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS moderation_logs (
     reason TEXT,
     logged_by TEXT,
     moderation_note TEXT,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(school_id) REFERENCES schools(id)
 );
 
@@ -41,15 +41,15 @@ CREATE TABLE IF NOT EXISTS moderation_logs (
 CREATE TABLE IF NOT EXISTS ga_context (
     id TEXT PRIMARY KEY,
     school_id TEXT UNIQUE NOT NULL,
-    last_pulse_morning DATETIME,
-    last_pulse_afternoon DATETIME,
-    last_pulse_evening DATETIME,
+    last_pulse_morning TIMESTAMP,
+    last_pulse_afternoon TIMESTAMP,
+    last_pulse_evening TIMESTAMP,
     member_count INTEGER DEFAULT 0,
     is_in_emergency_mode BOOLEAN DEFAULT 0,
     emergency_reason TEXT,
-    emergency_started_at DATETIME,
+    emergency_started_at TIMESTAMP,
     active_announcements TEXT, -- JSON array of active announcements
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(school_id) REFERENCES schools(id)
 );
 
@@ -62,11 +62,11 @@ CREATE TABLE IF NOT EXISTS conversation_memory (
     user_id TEXT,
     message_role TEXT CHECK(message_role IN ('user', 'assistant')) NOT NULL,
     message_content TEXT NOT NULL,
-    message_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    message_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     context_snapshot TEXT, -- JSON snapshot of context at time of message
     action_performed TEXT,
     action_status TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(school_id) REFERENCES schools(id),
     FOREIGN KEY(user_id) REFERENCES users(id)
 );
@@ -80,9 +80,9 @@ CREATE TABLE IF NOT EXISTS agent_memory_snapshots (
     user_id TEXT,
     summary_content TEXT NOT NULL, -- LLM-generated summary
     message_count_included INTEGER,
-    time_period_start DATETIME,
-    time_period_end DATETIME,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    time_period_start TIMESTAMP,
+    time_period_end TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(school_id) REFERENCES schools(id),
     FOREIGN KEY(user_id) REFERENCES users(id)
 );
@@ -96,14 +96,14 @@ CREATE TABLE IF NOT EXISTS pdf_signatures (
     signer_name TEXT NOT NULL,
     signer_role TEXT CHECK(signer_role IN ('teacher', 'admin', 'school')) NOT NULL,
     signer_phone TEXT NOT NULL,
-    timestamp DATETIME NOT NULL,
+    timestamp TIMESTAMP NOT NULL,
     document_hash TEXT NOT NULL,
     signature_hash TEXT NOT NULL,
     certificate_thumbprint TEXT,
     is_valid BOOLEAN DEFAULT 1,
     revocation_reason TEXT,
-    revoked_at DATETIME,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    revoked_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(school_id) REFERENCES schools(id)
 );
 

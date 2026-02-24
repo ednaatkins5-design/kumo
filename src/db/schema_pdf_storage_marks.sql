@@ -11,14 +11,14 @@ CREATE TABLE IF NOT EXISTS pdf_documents (
     mime_type TEXT DEFAULT 'application/pdf',
     document_hash TEXT, -- SHA256 for verification
     status TEXT CHECK(status IN ('generated', 'sent', 'confirmed', 'rejected')) DEFAULT 'generated',
-    generated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     sent_to_phone TEXT,
-    sent_at DATETIME,
+    sent_at TIMESTAMP,
     confirmed_by_teacher BOOLEAN DEFAULT 0,
-    confirmed_at DATETIME,
+    confirmed_at TIMESTAMP,
     confirmation_notes TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(school_id) REFERENCES schools(id),
     FOREIGN KEY(teacher_id) REFERENCES users(id)
 );
@@ -38,9 +38,9 @@ CREATE TABLE IF NOT EXISTS marks_data_entry (
     total_score DECIMAL(5,2) GENERATED ALWAYS AS (assessment_total + midterm_total + exam_total) STORED,
     pdf_document_id TEXT,
     status TEXT CHECK(status IN ('draft', 'submitted', 'confirmed', 'finalized')) DEFAULT 'draft',
-    submission_date DATETIME,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    submission_date TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(school_id) REFERENCES schools(id),
     FOREIGN KEY(teacher_id) REFERENCES users(id),
     FOREIGN KEY(pdf_document_id) REFERENCES pdf_documents(id)
@@ -60,8 +60,8 @@ CREATE TABLE IF NOT EXISTS student_mark_entry (
     total_score DECIMAL(5,2) GENERATED ALWAYS AS (assessment_score + midterm_score + exam_score) STORED,
     grade TEXT,  -- A, B, C, D, F etc
     status TEXT CHECK(status IN ('draft', 'submitted', 'confirmed')) DEFAULT 'draft',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(marks_data_entry_id) REFERENCES marks_data_entry(id),
     FOREIGN KEY(student_id) REFERENCES students(student_id)
 );
@@ -76,9 +76,9 @@ CREATE TABLE IF NOT EXISTS attendance_data_entry (
     term_id TEXT NOT NULL,
     pdf_document_id TEXT,
     status TEXT CHECK(status IN ('draft', 'submitted', 'confirmed', 'finalized')) DEFAULT 'draft',
-    submission_date DATETIME,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    submission_date TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(school_id) REFERENCES schools(id),
     FOREIGN KEY(teacher_id) REFERENCES users(id),
     FOREIGN KEY(pdf_document_id) REFERENCES pdf_documents(id)
@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS student_attendance_entry (
     present BOOLEAN NOT NULL,
     notes TEXT,
     status TEXT CHECK(status IN ('draft', 'submitted', 'confirmed')) DEFAULT 'draft',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(attendance_data_entry_id) REFERENCES attendance_data_entry(id),
     FOREIGN KEY(student_id) REFERENCES students(student_id)
 );

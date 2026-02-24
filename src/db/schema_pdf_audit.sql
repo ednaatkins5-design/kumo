@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS pdf_generation_audit (
     
     -- Timestamps
     generated_at BIGINT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
     -- LLM reasoning for audit
     reasoning TEXT,

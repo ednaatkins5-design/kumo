@@ -14,7 +14,7 @@ ALTER TABLE escalations ADD COLUMN resolved_at BIGINT;
 ALTER TABLE escalations ADD COLUMN resolved_by TEXT;
 
 -- Add admin_decision_at for precise decision timestamp
-ALTER TABLE escalations ADD COLUMN admin_decision_at DATETIME;
+ALTER TABLE escalations ADD COLUMN admin_decision_at TIMESTAMP;
 
 -- Create an index on admin_decision for quick filtering
 CREATE INDEX IF NOT EXISTS idx_escalations_admin_decision ON escalations(admin_decision);

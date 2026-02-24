@@ -6,8 +6,8 @@ CREATE TABLE IF NOT EXISTS setup_state (
     pending_steps TEXT DEFAULT '[]',    -- JSON array
     is_active BOOLEAN DEFAULT 1,
     config_draft TEXT DEFAULT '{}',    -- JSON object
-    last_interaction DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_interaction TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(school_id) REFERENCES schools(id)
 );
 

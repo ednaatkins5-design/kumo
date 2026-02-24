@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS schools (
     whatsapp_number TEXT, -- The WhatsApp phone number used for pairing code connection
     connected_whatsapp_jid TEXT, -- ✅ The WhatsApp JID (number) this school's bot is connected to for multi-tenancy routing
     config_json TEXT DEFAULT '{}',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS users (
@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT,
     email TEXT,
     is_active INTEGER DEFAULT 1,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(school_id) REFERENCES schools(id),
     UNIQUE(phone, school_id)
 );
@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS students (
     name TEXT NOT NULL,
     class_level TEXT NOT NULL,
     parent_access_code TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(school_id) REFERENCES schools(id)
 );
 
@@ -44,9 +44,9 @@ CREATE TABLE IF NOT EXISTS teacher_access_tokens (
     token TEXT PRIMARY KEY,
     teacher_id TEXT NOT NULL,
     school_id TEXT NOT NULL,
-    expires_at DATETIME NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
     is_revoked BOOLEAN DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(teacher_id) REFERENCES users(id),
     FOREIGN KEY(school_id) REFERENCES schools(id)
 );
@@ -62,8 +62,8 @@ CREATE TABLE IF NOT EXISTS transactions (
     pop_image_path TEXT NOT NULL,
     reviewed_by TEXT,
     review_note TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(school_id) REFERENCES schools(id),
     FOREIGN KEY(student_id) REFERENCES students(student_id),
     FOREIGN KEY(reviewed_by) REFERENCES users(id)
@@ -78,8 +78,8 @@ CREATE TABLE IF NOT EXISTS academic_drafts (
     raw_image_path TEXT NOT NULL,
     ocr_data TEXT NOT NULL,
     status TEXT CHECK(status IN ('draft', 'teacher_confirmed', 'admin_locked')) NOT NULL,
-    locked_at DATETIME,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    locked_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(school_id) REFERENCES schools(id),
     FOREIGN KEY(teacher_id) REFERENCES users(id)
 );
@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS messages (
     action_performed TEXT,
     action_status TEXT,
     is_internal INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(school_id) REFERENCES schools(id),
     FOREIGN KEY(user_id) REFERENCES users(id)
 );
@@ -108,13 +108,13 @@ CREATE TABLE IF NOT EXISTS academic_terms (
     term_name TEXT NOT NULL,
     start_date TEXT NOT NULL,
     end_date TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(school_id) REFERENCES schools(id)
 );
 
 CREATE TABLE IF NOT EXISTS audit_logs (
     id TEXT PRIMARY KEY,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     actor_phone TEXT NOT NULL,
     action TEXT NOT NULL,
     target_resource TEXT NOT NULL,

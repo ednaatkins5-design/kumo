@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS escalation_audit_log (
     context_data TEXT,      -- JSON blob with additional event context
     
     -- Tracking
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
     FOREIGN KEY(escalation_id) REFERENCES escalations(id),
     FOREIGN KEY(school_id) REFERENCES schools(id)

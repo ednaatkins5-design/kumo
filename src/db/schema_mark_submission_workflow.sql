@@ -28,12 +28,12 @@ CREATE TABLE IF NOT EXISTS mark_submission_workflow (
     admin_decision TEXT CHECK(admin_decision IN ('APPROVE', 'REQUEST_CORRECTION', 'REJECT')),
     admin_decision_notes TEXT,
     admin_phone TEXT,
-    admin_decision_at DATETIME,
+    admin_decision_at TIMESTAMP,
     
     -- Timestamps
-    submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
     FOREIGN KEY(school_id) REFERENCES schools(id),
     FOREIGN KEY(teacher_id) REFERENCES users(id),

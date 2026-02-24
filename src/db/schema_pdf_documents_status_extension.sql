@@ -34,14 +34,14 @@ CREATE TABLE IF NOT EXISTS pdf_documents_updated (
         'ADMIN_REJECTED',
         'FINALIZED'
     )) DEFAULT 'generated',
-    generated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     sent_to_phone TEXT,
-    sent_at DATETIME,
+    sent_at TIMESTAMP,
     confirmed_by_teacher BOOLEAN DEFAULT 0,
-    confirmed_at DATETIME,
+    confirmed_at TIMESTAMP,
     confirmation_notes TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(school_id) REFERENCES schools(id),
     FOREIGN KEY(teacher_id) REFERENCES users(id)
 );

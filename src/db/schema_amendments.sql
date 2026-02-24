@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS amendment_requests (
     payload TEXT NOT NULL, -- JSON string detailing the proposed change
     impact_scope TEXT CHECK(impact_scope IN ('FUTURE_ONLY', 'CURRENT_TERM', 'HISTORICAL')) NOT NULL,
     status TEXT CHECK(status IN ('DRAFT', 'AWAITING_CONFIRMATION', 'APPROVED', 'REJECTED')) NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(school_id) REFERENCES schools(id)
 );
 
@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS amendment_audit_log (
     amendment_id TEXT NOT NULL,
     action_taken TEXT NOT NULL, -- e.g., CREATED, CONFIRMED, REJECTED, CANCELLED
     actor_role TEXT CHECK(actor_role IN ('SA', 'SYSTEM')) NOT NULL,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     notes TEXT,
     FOREIGN KEY(amendment_id) REFERENCES amendment_requests(id)
 );
@@ -37,8 +37,8 @@ CREATE TABLE IF NOT EXISTS parent_access_tokens (
     parent_id TEXT NOT NULL,
     school_id TEXT NOT NULL,
     term_id TEXT NOT NULL, -- Access is per term
-    expires_at DATETIME NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(parent_id) REFERENCES users(id),
     FOREIGN KEY(school_id) REFERENCES schools(id)
 );
@@ -64,7 +64,7 @@ ALTER TABLE academic_drafts ADD COLUMN raw_images_json TEXT DEFAULT '[]';
 ALTER TABLE academic_drafts ADD COLUMN observed_students_json TEXT DEFAULT '[]';
 ALTER TABLE academic_drafts ADD COLUMN expected_students_json TEXT DEFAULT '[]';
 ALTER TABLE academic_drafts ADD COLUMN verification_pdf_id TEXT;
-ALTER TABLE academic_drafts ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE academic_drafts ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
 
 -- Drop old columns that are no longer used
 -- ALTER TABLE academic_drafts DROP COLUMN raw_image_path;

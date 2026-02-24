@@ -37,8 +37,8 @@ CREATE TABLE IF NOT EXISTS escalations (
     status TEXT DEFAULT 'ESCALATED' CHECK(status IN ('ESCALATED', 'IN_AUTHORITY', 'AUTHORITY_RESPONDED', 'RESUMED', 'RESOLVED', 'CLOSED')),
     timestamp BIGINT NOT NULL,
     resumed_at BIGINT,                     -- When original agent resumed
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
     FOREIGN KEY(school_id) REFERENCES schools(id)
 );
@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS escalation_round_log (
     
     -- Metadata
     timestamp BIGINT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
     FOREIGN KEY(escalation_id) REFERENCES escalations(id)
 );

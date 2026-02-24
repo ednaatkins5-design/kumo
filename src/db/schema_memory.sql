@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS memory_snapshots (
     summary_text TEXT NOT NULL,
     embedding JSON NOT NULL, -- Stored as a JSON array of floats
     message_count INTEGER NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(school_id) REFERENCES schools(id),
     FOREIGN KEY(user_id) REFERENCES users(id)
 );

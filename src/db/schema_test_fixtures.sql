@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS parent_registry (
     parent_name TEXT,
     school_id TEXT NOT NULL,
     is_active INTEGER DEFAULT 1,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(school_id) REFERENCES schools(id)
 );
 
@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS parent_children_mapping (
     parent_id TEXT NOT NULL,
     student_id TEXT NOT NULL,
     relationship TEXT DEFAULT 'parent',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY(parent_id, student_id),
     FOREIGN KEY(student_id) REFERENCES students(student_id)
 );
@@ -40,8 +40,8 @@ CREATE TABLE IF NOT EXISTS escalations (
     what_agent_needed TEXT,
     context TEXT,
     status TEXT DEFAULT 'PENDING',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(school_id) REFERENCES schools(id)
 );
 
@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS fee_transactions (
     status TEXT DEFAULT 'pending',
     payment_method TEXT,
     reference TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(school_id) REFERENCES schools(id)
 );
 

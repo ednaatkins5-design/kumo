@@ -13,9 +13,9 @@ CREATE TABLE IF NOT EXISTS ta_setup_state (
     subjects TEXT DEFAULT '[]', -- JSON array
     workload_json TEXT DEFAULT '{}', -- JSON object: { "Class Name": ["Subject1", "Subject2"] }
     progress_percentage INTEGER DEFAULT 0, -- Setup progress (0-100)
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    completed_at DATETIME DEFAULT NULL, -- When teacher finalized setup and became operational
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP DEFAULT NULL, -- When teacher finalized setup and became operational
     PRIMARY KEY(teacher_id, school_id),
     FOREIGN KEY(teacher_id) REFERENCES users(id),
     FOREIGN KEY(school_id) REFERENCES schools(id)
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS student_info (
     school_id TEXT NOT NULL,
     name TEXT NOT NULL,
     class_level TEXT NOT NULL,
-    date_added DATETIME DEFAULT CURRENT_TIMESTAMP,
+    date_added TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(school_id) REFERENCES schools(id)
 );
 
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS class_student_mapping (
     roll_number TEXT,
     extraction_source TEXT CHECK(extraction_source IN ('VISION', 'MANUAL')) DEFAULT 'VISION',
     term_id TEXT NOT NULL,
-    recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     unified_id TEXT,
     FOREIGN KEY(school_id) REFERENCES schools(id),
     FOREIGN KEY(teacher_id) REFERENCES users(id),
@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS student_attendance_records (
     term_id TEXT NOT NULL,
     manual_entry INTEGER DEFAULT 0,
     manual_notes TEXT,
-    recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(school_id) REFERENCES schools(id),
     FOREIGN KEY(teacher_id) REFERENCES users(id),
     FOREIGN KEY(student_id) REFERENCES student_info(id)
@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS student_broadsheet (
     term_id TEXT NOT NULL,
     subjects TEXT NOT NULL, -- JSON array
     broadsheet_data TEXT NOT NULL, -- JSON object
-    recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(school_id) REFERENCES schools(id),
     FOREIGN KEY(teacher_id) REFERENCES users(id)
 );
@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS broadsheet_assignments (
     school_id TEXT NOT NULL,
     teacher_id TEXT NOT NULL,
     subjects TEXT NOT NULL, -- JSON array of subjects
-    generated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_active BOOLEAN DEFAULT 1,
     FOREIGN KEY(school_id) REFERENCES schools(id),
     FOREIGN KEY(teacher_id) REFERENCES users(id)

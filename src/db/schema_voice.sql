@@ -9,8 +9,8 @@ CREATE TABLE IF NOT EXISTS voice_sessions (
     agent_type TEXT DEFAULT 'PA',
     status TEXT DEFAULT 'initiated', -- initiated, active, completed, failed
     summary_text TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    completed_at DATETIME
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_voice_conv_id ON voice_sessions(conversation_id);
