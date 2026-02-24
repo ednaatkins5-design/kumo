@@ -23,7 +23,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         if (connectionString.includes('.supabase.co:5432')) {
             const match = connectionString.match(/postgresql:\/\/postgres:([^@]+)@db\.([^.]+)\.supabase\.co:5432\/postgres/);
             if (match) {
-                const password = encodeURIComponent(match[1]);
+                const password = encodeURIComponent(decodeURIComponent(match[1]));
                 const projectRef = match[2];
                 poolerUrl = `postgresql://postgres.${projectRef}:${password}@aws-1-eu-west-1.pooler.supabase.com:5432/postgres`;
             }
