@@ -28,7 +28,7 @@ services:
         sync: false
       
       - key: FRONTEND_URL
-        value: https://your-frontend.vercel.app
+        value: https://kumo-five.vercel.app
       
       - key: GROQ_MODEL
         value: moonshotai/kimi-k2-instruct-0905
