@@ -84,7 +84,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
             const statements = sql.split(';').filter(stmt => stmt.trim());
             for (const stmt of statements) {
                 if (stmt.trim()) {
-                    await client.query(stmt);
+                    await client.query(this.convertPlaceholder(stmt));
                 }
             }
         } finally {
