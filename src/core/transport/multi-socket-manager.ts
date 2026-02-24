@@ -520,10 +520,41 @@ export class WhatsAppTransportManager extends EventEmitter {
 
     /**
      * Create WhatsApp socket with the given session
-     * Uses file-based auth state (temporary fix)
+     * Uses hybrid approach: file-based + database backup
      */
     private async createSocket(schoolId: string, school: any, sessionDir: string, phoneNumber: string | null): Promise<void> {
+        // First try to use file-based auth (current working method)
         const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
+        
+        // Also try to backup/restore from database
+        try {
+            const dbSession = await whatsappSessionService.loadSession(schoolId);
+            if (dbSession && dbSession.creds && !state.creds?.registered) {
+                // DB has session but file doesn't - restore from DB
+                console.log(`[WhatsApp] 🔄 Restoring session from database backup...`);
+                // Write DB creds to files
+                const credsPath = path.join(sessionDir, 'creds.json');
+                fs.writeFileSync(credsPath, JSON.stringify(dbSession.creds));
+                // Reload state
+                const { state: restoredState } = await useMultiFileAuthState(sessionDir);
+                Object.assign(state.creds, restoredState.creds);
+            }
+        } catch (e) {
+            console.log(`[WhatsApp] ⚠️ DB restore skipped:`, e);
+        }
+        
+        // Wrap saveCreds to also backup to database
+        const originalSaveCreds = saveCreds;
+        const wrappedSaveCreds = async () => {
+            await originalSaveCreds();
+            // Backup to database
+            try {
+                await whatsappSessionService.saveSession(schoolId, state.creds);
+            } catch (e) {
+                console.log(`[WhatsApp] ⚠️ DB backup failed:`, e);
+            }
+        };
+        
         const { version, isLatest } = await fetchLatestBaileysVersion();
         
         console.log(`[WhatsApp] 📦 Baileys version: ${version.join('.')}, isLatest: ${isLatest}`);
@@ -541,7 +572,7 @@ export class WhatsAppTransportManager extends EventEmitter {
             generateHighQualityLinkPreview: true,
             keepAliveIntervalMs: 30000,
             browser: browserConfig,
-            printQRInTerminal: !phoneNumber, // Only print QR in QR mode
+            printQRInTerminal: !phoneNumber,
         });
         
         this.sockets.set(schoolId, sock);
