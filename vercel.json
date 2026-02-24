@@ -1,5 +1,5 @@
 {
-  "rootDirectory": "frontend/app",
-  "buildCommand": "npm install && npm run build",
-  "outputDirectory": "dist"
+  "installCommand": "cd frontend/app && npm install",
+  "buildCommand": "cd frontend/app && npm run build",
+  "outputDirectory": "frontend/app/dist"
 }
