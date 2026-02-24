@@ -13,8 +13,11 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
     private pool: Pool;
 
     constructor(connectionString: string) {
+        // Use connection pooler port (6543) for better compatibility
+        const poolerUrl = connectionString.replace(':5432', ':6543');
+        
         this.pool = new Pool({
-            connectionString,
+            connectionString: poolerUrl,
             max: 20,
             idleTimeoutMillis: 30000,
             connectionTimeoutMillis: 10000,
