@@ -13,8 +13,16 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
     private pool: Pool;
 
     constructor(connectionString: string) {
-        // Use connection pooler port (6543) for better compatibility
-        const poolerUrl = connectionString.replace(':5432', ':6543');
+        // Use Supabase Session Pooler for IPv4 compatibility (Render, Vercel, etc.)
+        // Format: postgresql://postgres.[PROJECT_REF]:[PASSWORD]@aws-1-eu-west-1.pooler.supabase.com:5432/postgres
+        let poolerUrl = connectionString;
+        
+        // If using direct connection, switch to pooler
+        if (connectionString.includes('.supabase.co:5432')) {
+            poolerUrl = connectionString
+                .replace('.supabase.co:5432', '.pooler.supabase.com:5432')
+                .replace('postgres:', 'postgres.jkgupprtadmekxiqiqho:');
+        }
         
         this.pool = new Pool({
             connectionString: poolerUrl,
