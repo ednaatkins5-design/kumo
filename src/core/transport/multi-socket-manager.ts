@@ -520,13 +520,10 @@ export class WhatsAppTransportManager extends EventEmitter {
 
     /**
      * Create WhatsApp socket with the given session
-     * Uses database-based session persistence for production
+     * Uses file-based auth state (temporary fix)
      */
     private async createSocket(schoolId: string, school: any, sessionDir: string, phoneNumber: string | null): Promise<void> {
-        // Use database-based auth state for persistence across container restarts
-        const authState = await this.getDbAuthState(schoolId);
-        const { state, saveCreds } = authState;
-        
+        const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
         const { version, isLatest } = await fetchLatestBaileysVersion();
         
         console.log(`[WhatsApp] 📦 Baileys version: ${version.join('.')}, isLatest: ${isLatest}`);
