@@ -20,8 +20,8 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         // If using direct connection, switch to pooler
         if (connectionString.includes('.supabase.co:5432')) {
             poolerUrl = connectionString
-                .replace('.supabase.co:5432', '.pooler.supabase.com:5432')
-                .replace('postgres:', 'postgres.jkgupprtadmekxiqiqho:');
+                .replace('db.', 'aws-0-us-east-1.pooler.')
+                .replace('.supabase.co:5432', '.supabase.com:5432');
         }
         
         this.pool = new Pool({
