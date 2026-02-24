@@ -49,10 +49,20 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         return sql.replace(/\?/g, () => `$${paramIndex++}`);
     }
 
+    private convertParams(params: any[]): any[] {
+        return params.map(p => {
+            // If param is a large timestamp (milliseconds since epoch), convert to seconds
+            if (typeof p === 'number' && p > 2147483647) {
+                return Math.floor(p / 1000); // Convert milliseconds to seconds
+            }
+            return p;
+        });
+    }
+
     async run(sql: string, params: any[] = []): Promise<void> {
         const client = await this.pool.connect();
         try {
-            await client.query(this.convertPlaceholder(sql), params);
+            await client.query(this.convertPlaceholder(sql), this.convertParams(params));
         } finally {
             client.release();
         }
@@ -61,7 +71,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
     async get<T = any>(sql: string, params: any[] = []): Promise<T | undefined> {
         const client = await this.pool.connect();
         try {
-            const result = await client.query(this.convertPlaceholder(sql), params);
+            const result = await client.query(this.convertPlaceholder(sql), this.convertParams(params));
             return result.rows[0] as T | undefined;
         } finally {
             client.release();
@@ -71,7 +81,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
     async all<T = any>(sql: string, params: any[] = []): Promise<T[]> {
         const client = await this.pool.connect();
         try {
-            const result = await client.query(this.convertPlaceholder(sql), params);
+            const result = await client.query(this.convertPlaceholder(sql), this.convertParams(params));
             return result.rows as T[];
         } finally {
             client.release();
