@@ -709,6 +709,33 @@ export class WhatsAppTransportManager extends EventEmitter {
                 
                 console.log(`[WhatsApp] 🚪 Connection closed: status=${statusCode}, error=${errorMsg}`);
                 
+                // Handle session conflict (440) - need to clear and restart fresh
+                if (statusCode === 440 || errorMsg.includes('Stream Errored')) {
+                    console.log(`[WhatsApp] 🔄 Session conflict detected - clearing session and will reconnect...`);
+                    this.sockets.delete(schoolId);
+                    
+                    // Clear filesystem session
+                    await this.clearSessionDir(schoolId);
+                    
+                    // Also clear database session
+                    try {
+                        await whatsappSessionService.deleteSession(schoolId);
+                    } catch (e) {
+                        // Ignore
+                    }
+                    
+                    await this.updateConnectionState(schoolId, 'disconnected');
+                    
+                    // Reconnect after a delay
+                    setTimeout(() => {
+                        console.log(`[WhatsApp] 🔄 Reconnecting with fresh session...`);
+                        this.connect(schoolId).catch(err => {
+                            console.log(`[WhatsApp] ❌ Reconnect error: ${err.message}`);
+                        });
+                    }, 5000);
+                    return;
+                }
+                
                 // 🔄 SIMPLE RECONNECT: Just try to reconnect for ANY close except explicit logout
                 // Let Baileys handle session management - don't clear anything
                 const stopReconnecting = statusCode === DisconnectReason.loggedOut;
