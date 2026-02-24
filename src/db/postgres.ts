@@ -63,6 +63,18 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         const client = await this.pool.connect();
         try {
             await client.query(this.convertPlaceholder(sql), this.convertParams(params));
+        } catch (err: any) {
+            // If foreign key error, retry without user_id if it's null
+            if (err.message && err.message.includes('foreign key constraint')) {
+                const nullIndex = params.findIndex(p => p === null || p === undefined);
+                if (nullIndex !== -1) {
+                    const newParams = [...params];
+                    newParams[nullIndex] = ''; // Use empty string instead of null
+                    await client.query(this.convertPlaceholder(sql), this.convertParams(newParams));
+                    return;
+                }
+            }
+            throw err;
         } finally {
             client.release();
         }
