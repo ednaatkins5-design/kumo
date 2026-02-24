@@ -1,7 +1,7 @@
 # Ignore backend and root files - only build frontend
-src
-dist
-node_modules
+/src
+/dist
+/node_modules
 *.ts
 *.js
 .env
@@ -9,3 +9,6 @@ render.yaml
 package.json
 tsconfig*
 *.sql
+check-*.js
+diagnose-*.js
+fix-*.js
