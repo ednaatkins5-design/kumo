@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 -- Token usage tracking
 CREATE TABLE IF NOT EXISTS token_access_logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT PRIMARY KEY,
     token TEXT NOT NULL,
     phone TEXT NOT NULL,
     user_id TEXT,

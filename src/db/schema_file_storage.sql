@@ -2,7 +2,7 @@
 -- Comprehensive file metadata tracking for enterprise-grade storage
 
 CREATE TABLE IF NOT EXISTS file_storage (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT PRIMARY KEY,
     file_id TEXT UNIQUE NOT NULL,
     school_id TEXT NOT NULL,
     user_id TEXT NOT NULL,
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS file_storage (
 
 -- Moderation Logs - Community management
 CREATE TABLE IF NOT EXISTS moderation_logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT PRIMARY KEY,
     school_id TEXT NOT NULL,
     message_id TEXT,
     message_author TEXT, -- Phone number of author
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS moderation_logs (
 
 -- Group Agent Context - Per-school community state
 CREATE TABLE IF NOT EXISTS ga_context (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT PRIMARY KEY,
     school_id TEXT UNIQUE NOT NULL,
     last_pulse_morning DATETIME,
     last_pulse_afternoon DATETIME,
@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS ga_context (
 
 -- Conversation Memory - For multi-turn context
 CREATE TABLE IF NOT EXISTS conversation_memory (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT PRIMARY KEY,
     school_id TEXT NOT NULL,
     agent TEXT NOT NULL, -- 'PA', 'TA', 'SA', 'GA'
     user_phone TEXT NOT NULL,
@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS conversation_memory (
 
 -- Agent Memory Snapshots - Periodic summaries for efficiency
 CREATE TABLE IF NOT EXISTS agent_memory_snapshots (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT PRIMARY KEY,
     school_id TEXT NOT NULL,
     agent TEXT NOT NULL,
     user_phone TEXT NOT NULL,
@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS agent_memory_snapshots (
 
 -- Digital Signatures - PDF signing records
 CREATE TABLE IF NOT EXISTS pdf_signatures (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT PRIMARY KEY,
     signature_id TEXT UNIQUE NOT NULL,
     document_id TEXT NOT NULL,
     school_id TEXT NOT NULL,

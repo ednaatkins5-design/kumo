@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS parent_children_mapping (
 
 -- Step 4: Token Access Log (audit trail for unknown parent token usage)
 CREATE TABLE IF NOT EXISTS parent_token_access_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT PRIMARY KEY,
     token TEXT NOT NULL,
     parent_phone TEXT NOT NULL,
     school_id TEXT NOT NULL,

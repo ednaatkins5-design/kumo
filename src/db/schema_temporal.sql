@@ -1,6 +1,6 @@
 -- Temporal Access for Teachers using external devices
 CREATE TABLE IF NOT EXISTS temporal_access (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT PRIMARY KEY,
     phone TEXT NOT NULL, -- The WhatsApp number being used
     user_id TEXT NOT NULL, -- The Teacher ID
     school_id TEXT NOT NULL,

@@ -1,0 +1,95 @@
+services:
+  - type: web
+    name: kumo-backend
+    env: node
+    region: ohio
+    plan: free
+    
+    buildCommand: npm install && npm run build && cp -r src/db/*.sql dist/db/
+    startCommand: npm start
+    
+    envVars:
+      - key: NODE_ENV
+        value: production
+      
+      - key: DB_TYPE
+        value: postgres
+      
+      - key: DATABASE_URL
+        sync: false
+      
+      - key: PORT
+        value: 3000
+      
+      - key: JWT_SECRET
+        sync: false
+      
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      
+      - key: FRONTEND_URL
+        value: https://your-frontend.vercel.app
+      
+      - key: GROQ_MODEL
+        value: moonshotai/kimi-k2-instruct-0905
+      
+      - key: GEMINI_MODEL
+        value: models/gemini-2.5-flash
+      
+      - key: PA_GROQ_API_KEY
+        sync: false
+      
+      - key: PA_GEMINI_API_KEY
+        sync: false
+      
+      - key: TA_GROQ_API_KEY
+        sync: false
+      
+      - key: TA_GEMINI_API_KEY
+        sync: false
+      
+      - key: SA_GROQ_API_KEY
+        sync: false
+      
+      - key: SA_GEMINI_API_KEY
+        sync: false
+      
+      - key: GA_GROQ_API_KEY
+        sync: false
+      
+      - key: GA_GEMINI_API_KEY
+        sync: false
+      
+      - key: PRIMARY_TA_GROQ_API_KEY
+        sync: false
+      
+      - key: PRIMARY_TA_GEMINI_API_KEY
+        sync: false
+      
+      - key: SUPABASE_URL
+        sync: false
+      
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      
+      - key: SUPABASE_STORAGE_BUCKET
+        value: kumo-uploads
+      
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      
+      - key: ELEVENLABS_WEBHOOK_SECRET
+        sync: false
+
+      # GROQ Retry Keys
+      - key: GROQ_RETRY_KEY_1
+        sync: false
+      
+      - key: GROQ_RETRY_KEY_2
+        sync: false
+      
+      - key: GROQ_RETRY_KEY_3
+        sync: false

@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS amendment_requests (
 );
 
 CREATE TABLE IF NOT EXISTS amendment_audit_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT PRIMARY KEY,
     amendment_id TEXT NOT NULL,
     action_taken TEXT NOT NULL, -- e.g., CREATED, CONFIRMED, REJECTED, CANCELLED
     actor_role TEXT CHECK(actor_role IN ('SA', 'SYSTEM')) NOT NULL,

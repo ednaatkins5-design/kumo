@@ -6,6 +6,12 @@ dotenv.config({ override: true });
 export const ENV = {
     // System
     DB_PATH: process.env.DB_PATH || path.join(process.cwd(), 'kumo.db'),
+    DB_TYPE: process.env.DB_TYPE || 'sqlite', // 'sqlite' or 'postgres'
+    DATABASE_URL: process.env.DATABASE_URL || '',
+    SUPABASE_URL: process.env.SUPABASE_URL || '',
+    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY || '',
+    SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY || '',
+    SUPABASE_STORAGE_BUCKET: process.env.SUPABASE_STORAGE_BUCKET || 'kumo-uploads',
     WHATSAPP_NAME: process.env.WHATSAPP_NAME || 'KUMO_SCHOOL_SYSTEM',
     LOG_LEVEL: process.env.LOG_LEVEL || 'info',
 

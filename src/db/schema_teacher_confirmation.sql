@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS submission_marks (
 
 -- Teacher confirmation audit trail
 CREATE TABLE IF NOT EXISTS teacher_confirmation_logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT PRIMARY KEY,
     submission_id TEXT NOT NULL,
     teacher_id TEXT NOT NULL,
     action TEXT CHECK(action IN ('VIEWED', 'CONFIRMED', 'REJECTED', 'REQUESTED_CORRECTION')) NOT NULL,
