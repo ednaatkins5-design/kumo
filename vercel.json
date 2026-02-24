@@ -3,5 +3,6 @@
     { "source": "/(.*)", "destination": "/" }
   ],
   "buildCommand": "cd frontend/app && npm install && npm run build",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "static": true
 }
