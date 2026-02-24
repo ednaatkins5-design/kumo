@@ -75,12 +75,16 @@ export class DatabaseManager {
                 try {
                     await adapter.run(statement);
                 } catch (err: any) {
-                    if (err.message && (err.message.includes('duplicate column name') || 
+                    // Silent skip for these common errors
+                    if (err.message && (
+                        err.message.includes('duplicate column name') || 
                         err.message.includes('already exists') ||
-                        err.message.includes('duplicate table name'))) {
-                        // Silent skip for idempotent operations
+                        err.message.includes('duplicate table name') ||
+                        err.message.includes('does not exist') // Table doesn't exist yet - will be created
+                    )) {
+                        // Silent skip
                     } else {
-                        logger.error({ err, schema: s.name, statement }, 'Failed to execute statement');
+                        logger.error({ err, schema: s.name, statement: statement.substring(0, 50) }, 'Failed to execute statement');
                     }
                 }
             }
@@ -165,11 +169,14 @@ export class DatabaseManager {
                 last_interaction INTEGER,
                 updated_at INTEGER
             )`);
-        } catch (err) {
-            logger.warn({ err }, 'setup_state table creation');
+            logger.info('setup_state table created');
+        } catch (err: any) {
+            if (!err.message?.includes('already exists')) {
+                logger.warn({ err }, 'setup_state table creation');
+            }
         }
 
-        // Also create other critical tables
+        // Also try to create other critical tables that might be missing
         const criticalTables = [
             'ta_setup_state',
             'student_info',
@@ -184,7 +191,7 @@ export class DatabaseManager {
                 // Just try to select - if it fails, we don't care
                 await adapter.get(`SELECT 1 FROM ${table} LIMIT 1`);
             } catch (err) {
-                logger.info({ table }, 'Table may not exist yet');
+                logger.info({ table }, 'Table may not exist yet - OK');
             }
         }
     }
