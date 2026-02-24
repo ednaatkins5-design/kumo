@@ -152,6 +152,22 @@ export class DatabaseManager {
         } catch (err) {
             logger.warn({ err }, 'idx_users_phone index');
         }
+
+        // Create setup_state table if not exists
+        try {
+            await adapter.run(`CREATE TABLE IF NOT EXISTS setup_state (
+                school_id TEXT PRIMARY KEY,
+                current_step TEXT NOT NULL,
+                completed_steps TEXT DEFAULT '[]',
+                pending_steps TEXT DEFAULT '[]',
+                is_active INTEGER DEFAULT 1,
+                config_draft TEXT DEFAULT '{}',
+                last_interaction INTEGER,
+                updated_at INTEGER
+            )`);
+        } catch (err) {
+            logger.warn({ err }, 'setup_state table creation');
+        }
     }
 
     public static async close(): Promise<void> {
