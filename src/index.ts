@@ -183,17 +183,20 @@ async function main() {
         // TEST ENDPOINT: Trigger SA Flow (No Auth - must be before authenticateToken)
         app.post('/api/test/trigger-sa', async (req: Request, res: Response) => {
             try {
-                const { from, body, type = 'text' } = req.body;
+                const { from, body, type = 'text', schoolId } = req.body;
                 
                 if (!from || !body) {
                     return res.status(400).json({ success: false, error: 'Missing from or body' });
                 }
 
-                logger.info({ from, body, type }, '📱 [TEST] Simulating WhatsApp message');
+                logger.info({ from, body, type, schoolId }, '📱 [TEST] Simulating WhatsApp message');
 
                 // Import and use the dispatcher
                 const { AgentDispatcher } = await import('./core/dispatcher');
                 const { v4: uuidv4 } = await import('uuid');
+                
+                // Use provided schoolId or default to test school
+                const testSchoolId = schoolId || '5201a568-e8b3-4390-85d6-87476ba76e89';
 
                 // Create a mock routed message
                 const message = {
@@ -205,12 +208,12 @@ async function main() {
                     timestamp: Date.now(),
                     source: 'user' as const,
                     context: 'SA' as const,
-                    schoolId: '3876fd28-bfe7-4450-bc69-bad51d533330', // testskull
+                    schoolId: testSchoolId,
                     identity: {
-                        userId: '8b862509-e8f1-4add-846b-1245c856ec68',
+                        userId: 'test-user-id',
                         phone: from,
                         role: 'admin' as const,
-                        schoolId: '3876fd28-bfe7-4450-bc69-bad51d533330',
+                        schoolId: testSchoolId,
                         name: 'Admin'
                     }
                 };
