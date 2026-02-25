@@ -320,9 +320,16 @@ export class WhatsAppTransportManager extends EventEmitter {
                         return;
                     }
 
-                    const lockedUntil = row.qr_refresh_locked_until
-                        ? new Date(row.qr_refresh_locked_until)
-                        : undefined;
+                    // Handle both string and numeric (epoch seconds) formats
+                    let lockedUntil: Date | undefined;
+                    if (row.qr_refresh_locked_until) {
+                        if (typeof row.qr_refresh_locked_until === 'number') {
+                            // It's epoch seconds - convert to Date
+                            lockedUntil = new Date(row.qr_refresh_locked_until * 1000);
+                        } else {
+                            lockedUntil = new Date(row.qr_refresh_locked_until);
+                        }
+                    }
 
                     if (lockedUntil && lockedUntil > new Date()) {
                         resolve({
@@ -401,12 +408,12 @@ export class WhatsAppTransportManager extends EventEmitter {
      */
     private async lockQR(schoolId: string): Promise<void> {
         const lockDuration = 5 * 60 * 1000; // 5 minutes
-        const lockedUntil = new Date(Date.now() + lockDuration);
+        const lockedUntil = Math.floor((Date.now() + lockDuration) / 1000); // Epoch seconds for PostgreSQL
 
         return new Promise((resolve) => {
             db.getDB().run(
                 `UPDATE schools SET qr_refresh_locked_until = ? WHERE id = ?`,
-                [lockedUntil.toISOString(), schoolId],
+                [lockedUntil, schoolId],
                 (err) => {
                     if (err) {
                         logger.error({ err, schoolId }, 'Failed to lock QR');
@@ -709,32 +716,22 @@ export class WhatsAppTransportManager extends EventEmitter {
                 
                 console.log(`[WhatsApp] 🚪 Connection closed: status=${statusCode}, error=${errorMsg}`);
                 
-                // Handle session conflict (440) - need to clear and restart fresh
-                if (statusCode === 440 || errorMsg.includes('Stream Errored')) {
-                    console.log(`[WhatsApp] 🔄 Session conflict detected - clearing session and will reconnect...`);
-                    this.sockets.delete(schoolId);
-                    
-                    // Clear filesystem session
-                    await this.clearSessionDir(schoolId);
-                    
-                    // Also clear database session
-                    try {
-                        await whatsappSessionService.deleteSession(schoolId);
-                    } catch (e) {
-                        // Ignore
-                    }
-                    
-                    await this.updateConnectionState(schoolId, 'disconnected');
-                    
-                    // Reconnect after a delay
-                    setTimeout(() => {
-                        console.log(`[WhatsApp] 🔄 Reconnecting with fresh session...`);
-                        this.connect(schoolId).catch(err => {
-                            console.log(`[WhatsApp] ❌ Reconnect error: ${err.message}`);
-                        });
-                    }, 5000);
-                    return;
-                }
+                // TODO: Handle session conflict (440) - temporarily disabled for testing
+                // if (statusCode === 440 || errorMsg.includes('Stream Errored')) {
+                //     console.log(`[WhatsApp] 🔄 Session conflict detected - clearing session and will reconnect...`);
+                //     this.sockets.delete(schoolId);
+                //     await this.clearSessionDir(schoolId);
+                //     try {
+                //         await whatsappSessionService.deleteSession(schoolId);
+                //     } catch (e) { }
+                //     await this.updateConnectionState(schoolId, 'disconnected');
+                //     setTimeout(() => {
+                //         this.connect(schoolId).catch(err => {
+                //             console.log(`[WhatsApp] ❌ Reconnect error: ${err.message}`);
+                //         });
+                //     }, 5000);
+                //     return;
+                // }
                 
                 // 🔄 SIMPLE RECONNECT: Just try to reconnect for ANY close except explicit logout
                 // Let Baileys handle session management - don't clear anything
