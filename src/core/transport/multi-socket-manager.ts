@@ -758,8 +758,36 @@ export class WhatsAppTransportManager extends EventEmitter {
             }
         });
         
-        // Credentials update
-        sock.ev.on('creds.update', saveCreds);
+        // Credentials update - also track registration
+        sock.ev.on('creds.update', async (creds) => {
+            console.log(`[WhatsApp] 📝 Creds updated: registered=${creds?.registered}, me=${JSON.stringify(creds?.me)}`);
+            
+            // If device just got registered, trigger connection open
+            if (creds?.registered && !sock.authState.creds.registered) {
+                console.log(`[WhatsApp] ✅ Device registered! Triggering connection open...`);
+                await this.updateConnectionState(schoolId, 'connected', sock.user?.id);
+                
+                const botJid = sock.user?.id;
+                const botPhone = botJid?.split('@')[0];
+                if (botPhone) {
+                    await this.saveWhatsAppNumber(schoolId, botPhone);
+                }
+                
+                this.getQREmitter(schoolId).emit('connected', { 
+                    schoolId, 
+                    botJid: botJid?.split(':')[0] || botJid 
+                });
+                
+                // Send welcome message
+                if (school.admin_phone) {
+                    this.sendAdminWelcomeMessage(schoolId, school.admin_phone).catch(err => {
+                        logger.error({ err, schoolId }, 'Failed to send admin welcome message');
+                    });
+                }
+            }
+            
+            await saveCreds();
+        });
         
         // LID resolution from contacts - also listen to history to build map early
         sock.ev.on('messaging-history.set', ({ contacts }) => {
